@@ -184,7 +184,7 @@ svg{display:block}
   padding:1.55rem 1.1rem .6rem;font-size:1.08rem;font-weight:700;outline:none;transition:border-color .2s,background .2s}
 .fld input:focus{border-color:var(--lilac);background:#2b1f58}
 .yearlbl{font-size:.8rem;font-weight:700;color:var(--mute2);margin:.9rem .2rem .5rem}
-.years{display:grid;grid-template-columns:repeat(5,1fr);gap:.4rem}
+.years{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
 .year{border:1.5px solid var(--line);background:transparent;border-radius:var(--r-s);padding:.85rem 0;font-weight:800;font-size:.98rem;cursor:pointer;
   transition:all .2s var(--ease);font-variant-numeric:tabular-nums}
 .year.on{background:var(--paper);color:var(--night);border-color:var(--paper);transform:translateY(-2px)}

@@ -146,22 +146,35 @@ function lev(a, b) {
   for (let i = 1; i <= m; i++) { const c = [i]; for (let j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; }
   return p[n];
 }
-const LV = { locker: { sim: .7, tok: .5, loose: true }, normal: { sim: .8, tok: .6, loose: false }, streng: { sim: .9, tok: 9, loose: false } };
+const LV = { locker: { sim: .62, tok: .5, loose: true }, normal: { sim: .78, tok: .6, loose: false }, streng: { sim: .9, tok: 9, loose: false } };
 const tol = len => len <= 3 ? 0 : len <= 5 ? 1 : len <= 8 ? 2 : 3;
+// Lautähnliche Schreibweisen angleichen: "Tiesto/Tiësto", "Gouryela/Gouryella", "Kristal/Crystal" …
+const simp = s => s.replace(/ph/g, "f").replace(/ck/g, "k").replace(/c(?=[aou ]|$)/g, "k").replace(/c/g, "s").replace(/z/g, "s").replace(/y/g, "i")
+  .replace(/th/g, "t").replace(/ie/g, "i").replace(/ou/g, "u").replace(/oo/g, "u").replace(/(.)\1+/g, "$1").replace(/h(?![aeiou])/g, "");
+const STOP = new Set(["a", "an", "of", "in", "on", "to", "my", "me", "you", "i", "is", "it", "and", "for", "be", "la", "le", "el", "de", "der", "die", "das", "und", "im", "am"]);
 function similar(g, a, L) {
   if (!g || !a) return false;
   if (g === a) return true;
   const gc = g.replace(/ /g, ""), ac = a.replace(/ /g, "");
   if (gc === ac) return true;
-  if (1 - lev(gc, ac) / Math.max(gc.length, ac.length) >= L.sim) return true;
+  const ratio = (x, y) => 1 - lev(x, y) / Math.max(x.length, y.length);
+  if (ratio(gc, ac) >= L.sim) return true;
   if (L.tok > 1) return false;
   if (ac.length >= 3 && gc.includes(ac)) return true;
-  if (L.loose && gc.length >= 4 && ac.includes(gc) && gc.length / ac.length >= .4) return true;
-  const at = a.split(" ").filter(w => w.length > 1 || /\d/.test(w)), gt = g.split(" ");
-  if (!at.length) return false;
-  const hit = at.filter(w => gt.some(x => x === w || (w.length > 3 && lev(x, w) <= tol(w.length))));
+  if (L.loose) {
+    const gs = simp(gc), as = simp(ac);
+    if (gs === as || ratio(gs, as) >= L.sim - .04) return true;
+    if (gc.length >= 3 && ac.startsWith(gc) && gc.length / ac.length >= .3) return true;            // Anfang reicht: "sandst" -> Sandstorm
+    if (gc.length >= 4 && ac.includes(gc) && gc.length / ac.length >= .3) return true;             // Teil reicht: "feels like"
+    if (gc.length >= 5 && ac.length >= 5 && ratio(gs, as.slice(0, gs.length)) >= .75 && gs.length / as.length >= .45) return true; // vertippter Anfang
+  }
+  const at = a.split(" ").filter(w => (w.length > 1 || /\d/.test(w)) && !STOP.has(w)), gt = g.split(" ").filter(w => w.length > 1 || /\d/.test(w));
+  if (!at.length || !gt.length) return false;
+  const tokHit = (w, x) => x === w || (w.length > 3 && lev(x, w) <= tol(w.length)) ||
+    (L.loose && ((x.length >= 4 && w.startsWith(x)) || (w.length > 3 && simp(x) === simp(w)) || (w.length > 4 && lev(simp(x), simp(w)) <= tol(w.length))));
+  const hit = at.filter(w => gt.some(x => tokHit(w, x)));
   if (hit.length / at.length >= L.tok && hit.some(w => w.length >= 3)) return true;
-  return L.loose && (hit.some(w => w.length >= 5) || (hit.length / at.length >= .34 && hit.some(w => w.length >= 4)));
+  return L.loose && (hit.some(w => w.length >= 4) || (hit.length / at.length >= .34 && hit.some(w => w.length >= 3)));
 }
 function variants(answer, isArtist) {
   const v = new Set([answer, answer.replace(/\(.*?\)/g, ""), answer.replace(/[()]/g, " ")]);
@@ -1024,10 +1037,10 @@ function makeYears(years) {
   const ok = y => !years.includes(y) && y <= THIS_YEAR && y >= 1950;
   const range = (a, b) => { const r = []; for (let d = a; d <= b; d++) { if (ok(correct - d)) r.push(correct - d); if (ok(correct + d)) r.push(correct + d); } return r; };
   const opts = new Set([correct]);
-  const plan = S.yearLevel === "leicht" ? [[3, 10, 4]] : S.yearLevel === "schwer" ? [[1, 3, 4]] : [[1, 2, 2], [3, 7, 2]];
+  const plan = S.yearLevel === "leicht" ? [[4, 12, 2]] : S.yearLevel === "schwer" ? [[1, 2, 2]] : [[1, 3, 1], [3, 8, 1]];
   plan.forEach(([a, b, k]) => shuffle(range(a, b)).slice(0, k).forEach(y => opts.add(y)));
-  shuffle(range(1, 15)).forEach(y => { if (opts.size < 5) opts.add(y); });
-  return [...opts].slice(0, 5).sort((a, b) => a - b);
+  shuffle(range(1, 15)).forEach(y => { if (opts.size < 3) opts.add(y); });
+  return [...opts].slice(0, 3).sort((a, b) => a - b);
 }
 function renderYears() {
   $("#years").innerHTML = P.yearOpts.map(y => `<button type="button" class="year${y === P.yearPick ? " on" : ""}${P.struck.includes(y) ? " out" : ""}" data-y="${y}">${y}</button>`).join("");
@@ -1045,8 +1058,8 @@ const mask = s => s.replace(/\(.*?\)/g, "").trim().split(/\s+/).map(w => w.repla
 const HINTS = [
   { id: "artist", name: "Interpret anspielen", desc: "Anfangsbuchstaben und Länge des Namens", run: s => ({ k: "Interpret", v: mask(s[0]), code: true }) },
   { id: "title", name: "Titel anspielen", desc: "Anfangsbuchstaben und Länge des Titels", run: s => ({ k: "Titel", v: mask(s[1]), code: true }) },
-  { id: "year", name: "50:50 beim Jahr", desc: "Zwei falsche Jahre fliegen raus", ok: s => P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick).length >= 2,
-    run: s => { P.struck = shuffle(P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick)).slice(0, 2); renderYears(); return { k: "Jahr", v: "Zwei falsche Jahre sind gestrichen" }; } },
+  { id: "year", name: "Jahr eingrenzen", desc: "Ein falsches Jahr fliegt raus", ok: s => P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick).length >= 1,
+    run: s => { P.struck = shuffle(P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick)).slice(0, 1); renderYears(); return { k: "Jahr", v: "Ein falsches Jahr ist gestrichen" }; } },
   { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverShown,
     run: () => { showCover(true); return { k: "Cover", v: "Schau auf die Platte" }; } },
 ];
