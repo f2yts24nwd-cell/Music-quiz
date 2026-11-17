@@ -89,7 +89,7 @@ const BAD_ALBUM = /\b(karaoke|tribute|cover|instrumental|workout|lullaby|8-bit|p
 async function loadExtra(g) {
   if (!g.dz) return [];
   if (g._extra) return g._extra;
-  const ck = "mq-dz-" + g.id, cached = store.get(ck, null);
+  const ck = "mq-dz2-" + g.id, cached = store.get(ck, null);
   if (cached && Date.now() - cached.t < 3 * 864e5 && cached.s.length) return (g._extra = cached.s);
   const have = new Set(g.songs.map(s => songKey(s[0], s[1]))), out = [];
   const lists = (await Promise.allSettled(g.dz.map(q => jsonp("search/playlist?limit=6&q=" + encodeURIComponent(q)))))
@@ -185,7 +185,7 @@ function jsonp(path) {
   });
 }
 const cache = new Map();
-const dzOf = f => ({ preview: f.preview, cover: f.album && (f.album.cover_xl || f.album.cover_big), link: f.link, albumId: f.album && f.album.id });
+const dzOf = f => ({ preview: f.preview, cover: f.album && (f.album.cover_xl || f.album.cover_big), link: f.link, albumId: f.album && f.album.id, rank: f.rank || 0 });
 function lookup(song) {
   if (song[3]) return Promise.resolve(song[3]);
   const key = song[0] + "|" + song[1];
@@ -325,7 +325,7 @@ async function openSetup(g) {
   setDiscColors($("#setupDisc"), g);
   $("#setupName").textContent = g.name; $("#setupTag").textContent = g.tagline;
   $("#partyWrap").classList.toggle("hide", mode !== "party");
-  renderPlayers(); renderSetupSummary();
+  renderPlayers(); renderSetupSummary(); renderFame(g);
   $("#start").disabled = false;
   if (g.live) {
     $("#setupFilterWrap").classList.add("hide");
@@ -351,6 +351,22 @@ async function openSetup(g) {
   if (g.dynamic) { $("#start").disabled = true; $("#start").textContent = "Lade Songs …"; g._extraP.then(x => { if (setupGenre !== g) return; $("#start").disabled = !x.length; $("#start").textContent = x.length ? "Runde starten" : "Deezer nicht erreichbar"; }); }
   openSheet("setup");
 }
+/* Bekanntheit: bekannte Hits, Mischung oder Geheimtipps (nach Deezer-Popularität) */
+let fame = store.get("mq-fame", "mix");
+const FAME_NOTE = { known: "Nur die großen Hits, die fast jeder kennt.", mix: "Große Hits und weniger bekannte Songs gemischt.", deep: "Weniger bekannte Songs aus dem Genre – für Kenner." };
+function renderFame(g) {
+  $("#fameWrap").classList.toggle("hide", !!g.live || !g.dz);
+  $$("#fame button").forEach(b => b.classList.toggle("on", b.dataset.f === fame));
+  $("#fameNote").textContent = FAME_NOTE[fame];
+}
+$("#fame").onclick = e => { const b = e.target.closest("button"); if (!b) return; SFX.tap(); fame = b.dataset.f; store.set("mq-fame", fame); renderFame(setupGenre); };
+function byFame(curated, extra) {
+  if (fame === "mix" || !extra.length) return curated.concat(extra);
+  const ranks = extra.map(s => (s[3] && s[3].rank) || 0).sort((x, y) => y - x);
+  if (fame === "known") { const hi = ranks[Math.floor(ranks.length * .35)] || 0; return curated.concat(extra.filter(s => ((s[3] && s[3].rank) || 0) >= hi)); }
+  const lo = ranks[Math.floor(ranks.length * .45)] || 0, deep = extra.filter(s => ((s[3] && s[3].rank) || 0) < lo);
+  return deep.length >= 8 ? deep : curated.concat(extra);
+}
 $("#setupFilter").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; b.classList.toggle("on"); SFX.tap(); $("#start").disabled = !$("#setupFilter .on"); };
 function renderPlayers() {
   $("#players").innerHTML = players.map((p, i) => `<div class="player-row"><input value="${esc(p)}" data-i="${i}" placeholder="Spieler ${i + 1}" maxlength="16">${players.length > 2 ? `<button data-x="${i}" aria-label="Entfernen">×</button>` : ""}</div>`).join("");
@@ -372,7 +388,8 @@ $("#start").onclick = async () => {
     const chips = $$("#setupFilter .chip"), sel = $$("#setupFilter .on").map(b => +b.dataset.v);
     songs = songs.filter(s => sel.includes(groupOf(g, s)));
     if (chips.length > 1 && sel.length < chips.length) allowed = new Set(sel);
-    songs = songs.concat(g._extra || []);
+    songs = byFame(songs, g._extra || []);
+    if (fame === "deep" && songs.length && !(g._extra || []).includes(songs[0])) toast("Zu wenige Geheimtipps geladen – es gibt eine Mischung");
   }
   closeSheet(true);
   startRound({ genre: g, songs, mode, allowed });

@@ -355,3 +355,5 @@ html.ipad .stage{width:min(38vw,26rem)}
   .fxsel{grid-template-columns:repeat(2,1fr)}
   .pads{grid-template-columns:repeat(8,1fr)}
 }
+
+.fame-note{color:var(--mute);font-size:.82rem;margin:.55rem 0 0;line-height:1.4}
