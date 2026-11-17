@@ -153,7 +153,7 @@ h2{font-family:Unbounded,sans-serif;font-weight:700;font-size:15px;margin:22px 0
   <button class="back" data-go="genre">‹ Genres</button>
   <h1 class="display" id="gName"></h1>
   <p class="lead" id="gTag"></p>
-  <h2>Jahrzehnte</h2>
+  <h2 id="groupLbl">Jahrzehnte</h2>
   <div class="chips" id="decades"></div>
   <h2>Songs pro Runde</h2>
   <div class="chips" id="counts">
@@ -212,6 +212,7 @@ h2{font-family:Unbounded,sans-serif;font-weight:700;font-size:15px;margin:22px 0
 
 <!-- Genres: für ein neues Genre eine Datei in genres/ anlegen und hier einbinden -->
 <script src="genres/trance.js"></script>
+<script src="genres/charts.js"></script>
 <script>
 const $=s=>document.querySelector(s);
 const SECTIONS=["genre","setup","game","end"];
@@ -442,18 +443,20 @@ function chipGroup(id,multi){
 }
 chipGroup("#decades",true);chipGroup("#counts",false);chipGroup("#lengths",false);
 
+const groupOf=s=>G&&G.groupBy==="year"?s[2][s[2].length-1]:Math.floor(s[2][0]/10)*10;
 function pickGenre(g){
   G=g;
   $("#gName").textContent=g.name;$("#gTag").textContent=g.tagline;
-  const decs=[...new Set(g.songs.map(s=>Math.floor(s[2][0]/10)*10))].sort();
-  $("#decades").innerHTML=decs.map(d=>`<button class="chip on" data-v="${d}">${d<2000?String(d).slice(2):d}er</button>`).join("");
+  const groups=[...new Set(g.songs.map(groupOf))].sort();
+  $("#groupLbl").textContent=g.groupBy==="year"?"Jahre":"Jahrzehnte";
+  $("#decades").innerHTML=groups.map(d=>`<button class="chip on" data-v="${d}">${g.groupBy==="year"?d:(d<2000?String(d).slice(2):d)+"er"}</button>`).join("");
   $("#go").disabled=false;
   show("setup");
 }
 function startGame(){
   const decs=[...document.querySelectorAll("#decades .on")].map(b=>+b.dataset.v);
   const n=+$("#counts .on").dataset.v;listenSec=+$("#lengths .on").dataset.v;
-  pool=shuffle(G.songs.filter(s=>decs.includes(Math.floor(s[2][0]/10)*10)));
+  pool=shuffle(G.songs.filter(s=>decs.includes(groupOf(s))));
   round=pool.splice(0,Math.min(n,pool.length)).map(s=>({song:s}));
   idx=0;score=0;streak=0;results=[];
   show("game");loadSong();
