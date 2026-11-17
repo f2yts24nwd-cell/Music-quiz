@@ -655,3 +655,11 @@ html[data-theme=glass] .cdj .tt-pitch span{color:#fff}
 .sheet.shake{animation:shake .4s}
 @keyframes shake{20%,60%{transform:translate(calc(-50% - 10px),0)}40%,80%{transform:translate(calc(-50% + 10px),0)}}
 html[data-theme=glass] .pin{background:#ffffff1f;border-color:#ffffff40;color:#fff}
+
+.sap-head{display:flex;justify-content:space-between;align-items:baseline}
+.sap-head span{font-weight:800;color:var(--mute)}
+.sap-q{font-size:1.1rem;font-weight:800;line-height:1.35;margin:.2rem 0 .9rem}
+.sap-opts{display:grid;gap:.45rem}
+.sap-opts .mco{min-height:auto;padding:.85rem 1rem}
+.mco.good{background:#2bff88!important;color:#08210f!important;border-color:#2bff88!important}
+.mco.badopt{background:#ff3d5a!important;color:#fff!important;border-color:#ff3d5a!important}

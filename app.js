@@ -366,11 +366,59 @@ $("#genreList").onclick = e => { const b = e.target.closest(".genre"); if (!b) r
 let adultOK = false, pinGenre = null;
 const PIN_HASH = "6e93262ce7c9eec921aa6432678d72b23f751ce34d9307849971efe4c74d873f";
 async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
-function askPin(g) { pinGenre = g; $("#pinIn").value = ""; $("#pinErr").textContent = ""; openSheet("pin"); setTimeout(() => $("#pinIn").focus(), 350); }
+function askPin(g) { pinGenre = g; $("#pinIn").value = ""; $("#pinErr").textContent = ""; $("#pinStep").classList.remove("hide"); $("#sapStep").classList.add("hide"); openSheet("pin"); setTimeout(() => $("#pinIn").focus(), 350); }
+
+/* ---------- Zweite Hürde: SAP-Check (3 Fragen, alle richtig) ---------- */
+// [Frage, richtige Antwort, falsche Antworten …]
+const SAP_Q = [
+  ["Wofür steht ABAP heute?", "Advanced Business Application Programming", "Automated Business Analysis Platform", "Application Based Advanced Processing", "Advanced Batch And Processing"],
+  ["Wie heißt SAPs spaltenorientierte In-Memory-Datenbank?", "SAP HANA", "SAP MaxDB", "SAP Lumira", "SAP Ariba"],
+  ["Mit welcher Transaktion öffnet man klassisch den ABAP Editor?", "SE38", "SU01", "SM37", "ST22"],
+  ["Welche Transaktion dient der Benutzerpflege?", "SU01", "SE11", "SM59", "SPRO"],
+  ["Wofür nutzt man die Transaktion ST22?", "ABAP-Laufzeitfehler (Dumps) analysieren", "Hintergrundjobs einplanen", "Transportaufträge freigeben", "Benutzer anlegen"],
+  ["Was zeigt die Transaktion SM37?", "Die Übersicht der Hintergrundjobs", "Das ABAP Dictionary", "Die RFC-Verbindungen", "Den Customizing-Leitfaden"],
+  ["Was pflegt man in der Transaktion SE11?", "Das ABAP Dictionary (Tabellen, Datenelemente …)", "Benutzer und Rollen", "Hintergrundjobs", "Druckaufträge"],
+  ["Wofür ist die Transaktion SM59 da?", "RFC-Verbindungen (Destinationen) pflegen", "Kurzdumps anzeigen", "Transporte importieren", "Sperreinträge löschen"],
+  ["Über welche Transaktion erreicht man den Einführungsleitfaden (IMG) fürs Customizing?", "SPRO", "SE80", "SU53", "SM21"],
+  ["Mit welcher Transaktion verwaltet man Transportaufträge im Transport Organizer?", "SE09", "SE16", "SM50", "SU24"],
+  ["Auf welchem UI-Framework basieren SAP-Fiori-Apps?", "SAPUI5", "Web Dynpro Java", "Java Swing", "Adobe Flex"],
+  ["Über welches Protokoll holen Fiori-Apps typischerweise ihre Daten?", "OData", "SOAP-RPC", "FTP", "SMTP"],
+  ["Wofür steht BTP bei SAP?", "Business Technology Platform", "Business Transaction Processing", "Basis Transport Package", "Backend Testing Platform"],
+  ["Wofür steht CDS in ABAP CDS Views?", "Core Data Services", "Central Data Storage", "Customer Data Sync", "Compiled Data Statements"],
+  ["Wie heißt das aktuelle ABAP-Programmiermodell für Fiori-Apps und Services (RAP)?", "ABAP RESTful Application Programming Model", "Rapid ABAP Prototyping", "Remote ABAP Processing", "Runtime Application Platform"],
+  ["Wofür steht IDoc?", "Intermediate Document", "Integrated Data Object Collection", "Internal Delivery Order Code", "Interface Documentation"],
+  ["Was ist ein BAdI?", "Business Add-In – eine Erweiterungstechnik", "Ein Batch-Auftrag im Hintergrund", "Ein Berechtigungsobjekt", "Ein Datenbank-Index"],
+  ["Wofür steht RFC im SAP-Umfeld?", "Remote Function Call", "Request For Change", "Runtime Function Container", "Remote File Copy"],
+  ["Wie heißt SAPs ERP-Suite, die nur auf SAP HANA läuft und R/3 bzw. ECC ablöst?", "SAP S/4HANA", "SAP R/3", "SAP ECC 6.0", "SAP Business ByDesign"],
+  ["Was zeigt die Transaktion SU53 an?", "Die zuletzt fehlgeschlagene Berechtigungsprüfung", "Alle aktiven Benutzer-Sessions", "Die Systemprotokolle", "Offene Transportaufträge"],
+];
+let sap = null;
+function startSap() {
+  sap = { qs: shuffle(SAP_Q.slice()).slice(0, 3), i: 0, lock: false };
+  $("#pinStep").classList.add("hide"); $("#sapStep").classList.remove("hide"); $("#sapErr").textContent = ""; renderSap();
+}
+function renderSap() {
+  const [q, right, ...wrong] = sap.qs[sap.i];
+  $("#sapNo").textContent = `${sap.i + 1} / 3`; $("#sapQ").textContent = q;
+  $("#sapOpts").innerHTML = shuffle([right, ...wrong]).map(o => `<button class="mco" data-v="${esc(o)}">${esc(o)}</button>`).join("");
+}
+$("#sapOpts").onclick = e => {
+  const b = e.target.closest(".mco"); if (!b || sap.lock) return;
+  const right = sap.qs[sap.i][1];
+  if (b.dataset.v === right) {
+    b.classList.add("good"); SFX.good(); sap.lock = true;
+    setTimeout(() => { sap.lock = false; sap.i++; if (sap.i < 3) renderSap(); else { adultOK = true; closeSheet(true); toast("Freigeschaltet – viel Spaß"); setTimeout(() => openSetup(pinGenre), 250); } }, 550);
+  } else {
+    sap.lock = true; b.classList.add("badopt"); SFX.bad();
+    $$("#sapOpts .mco").forEach(x => { if (x.dataset.v === right) x.classList.add("good"); });
+    $("#sapErr").textContent = "Leider falsch – Zugang verweigert.";
+    setTimeout(() => { closeSheet(true); }, 1800);
+  }
+};
 async function checkPin() {
   const v = $("#pinIn").value.trim(); if (v.length < 4) return;
   let ok = false; try { ok = (await sha("mq-" + v)) === PIN_HASH; } catch (e) { ok = v === String(815).padStart(4, "0"); }
-  if (ok) { adultOK = true; closeSheet(true); SFX.good(); setTimeout(() => openSetup(pinGenre), 200); }
+  if (ok) { SFX.good(); startSap(); }
   else { $("#pinErr").textContent = "Falscher PIN"; $("#pinIn").value = ""; SFX.bad(); $("#sheet-pin").classList.remove("shake"); void $("#sheet-pin").offsetWidth; $("#sheet-pin").classList.add("shake"); }
 }
 $("#pinIn").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); if (e.target.value.length === 4) checkPin(); });
