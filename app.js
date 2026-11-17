@@ -298,29 +298,92 @@ function startDaily() {
   startRound({ genre: { id: "daily", name: "Tages-Challenge", colors: ["#b9a4ff", "#ffb38a"] }, songs, mode: "classic", daily: true, practice: done, keepOrder: true });
 }
 
-/* ============================ Deck: Wiedergabe, Scratch & Mischpult ============================ */
-// Bevorzugt Web Audio (Song wird dekodiert -> echtes Scratchen, Filter, Tempo).
-// Falls der Song nicht dekodiert werden kann, spielt ein <audio>-Element (Scratch dann als Vinyl-Rauschen).
+/* ============================ Deck: Wiedergabe, Scratch & DJ-Mixer ============================ */
+// Bevorzugt Web Audio (Song wird dekodiert -> echtes Scratchen, EQ, Filter, Beat-FX).
+// Falls der Song nicht dekodiert werden kann, spielt ein <audio>-Element ("Lite"-Modus).
 const audio = new Audio(); audio.preload = "auto"; audio.setAttribute("playsinline", "");
 audio.preservesPitch = false; audio.webkitPreservesPitch = false;
 try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {} // iPhone: auch im Lautlos-Modus hörbar
-const MIX = Object.assign({ vol: 90, tempo: 0, filter: 0 }, store.get("mq-mix", {}));
-let graph = null, loadToken = 0;
+const MIX = Object.assign({ vol: 85, tempo: 0, hi: 0, mid: 0, low: 0, filter: 0, fx: "echo", wet: 55, fxOn: false }, store.get("mq-mix2", {}));
+MIX.fxOn = false;
+let graph = null, loadToken = 0, noiseBuf = null;
+
+function makeImpulse(c, sec = 2.8, decay = 3.2) {
+  const n = c.sampleRate * sec | 0, b = c.createBuffer(2, n, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay); }
+  return b;
+}
+function makeDrive(c, k = 6) {
+  const ws = c.createWaveShaper(), n = 2048, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); }
+  ws.curve = curve; ws.oversample = "2x"; return ws;
+}
+function getNoise(c) {
+  if (noiseBuf) return noiseBuf;
+  noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate); const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return noiseBuf;
+}
 function getGraph() {
   const c = ac(); if (!c) return null; if (graph) return graph;
-  const filt = c.createBiquadFilter(), vol = c.createGain();
-  filt.connect(vol).connect(c.destination);
-  graph = { c, filt, vol }; applyMix(); return graph;
+  const G = { c };
+  G.input = c.createGain();
+  G.low = c.createBiquadFilter(); G.low.type = "lowshelf"; G.low.frequency.value = 180;
+  G.mid = c.createBiquadFilter(); G.mid.type = "peaking"; G.mid.frequency.value = 1000; G.mid.Q.value = .7;
+  G.hi = c.createBiquadFilter(); G.hi.type = "highshelf"; G.hi.frequency.value = 4500;
+  G.filt = c.createBiquadFilter();
+  G.gate = c.createGain();
+  G.vol = c.createGain();
+  G.master = c.createGain();
+  G.limit = c.createDynamicsCompressor();
+  G.limit.threshold.value = -9; G.limit.knee.value = 3; G.limit.ratio.value = 14; G.limit.attack.value = .002; G.limit.release.value = .12;
+  G.post = c.createGain(); G.post.gain.value = 1.35; // Make-up-Gain: lauter, der Limiter fängt die Spitzen
+  G.split = c.createChannelSplitter(2); G.anL = c.createAnalyser(); G.anR = c.createAnalyser(); G.anL.fftSize = G.anR.fftSize = 512;
+  G.input.connect(G.low).connect(G.mid).connect(G.hi).connect(G.filt).connect(G.gate).connect(G.vol).connect(G.master);
+  G.master.connect(G.limit).connect(G.post).connect(c.destination);
+  G.post.connect(G.split); G.split.connect(G.anL, 0); G.split.connect(G.anR, 1);
+  // Beat-FX (Send nach dem Kanalfader, Ausklingen nach dem Ausschalten)
+  G.send = c.createGain(); G.send.gain.value = 0; G.vol.connect(G.send);
+  G.wet = c.createGain(); G.wet.connect(G.master);
+  const d = c.createDelay(2); d.delayTime.value = .375; const fb = c.createGain(); fb.gain.value = .5;
+  const ehp = c.createBiquadFilter(); ehp.type = "highpass"; ehp.frequency.value = 280; d.connect(ehp).connect(fb).connect(d);
+  G.echo = { in: d, out: ehp };
+  const cv = c.createConvolver(); cv.buffer = makeImpulse(c); G.reverb = { in: cv, out: cv };
+  const fd = c.createDelay(.05); fd.delayTime.value = .004; const lfo = c.createOscillator(); lfo.frequency.value = .25;
+  const lg = c.createGain(); lg.gain.value = .0032; lfo.connect(lg).connect(fd.delayTime); lfo.start();
+  const ffb = c.createGain(); ffb.gain.value = .72; fd.connect(ffb).connect(fd); G.flanger = { in: fd, out: fd };
+  ["echo", "reverb", "flanger"].forEach(k => G[k].out.connect(G.wet));
+  const tl = c.createOscillator(); tl.type = "square"; tl.frequency.value = 8; G.transDepth = c.createGain(); G.transDepth.gain.value = 0;
+  tl.connect(G.transDepth).connect(G.gate.gain); tl.start();
+  // Sampler-Bus: eigene Sättigung, etwas Echo-Fahne, durch den Limiter
+  G.sampler = c.createGain(); G.sampler.gain.value = 1; G.sampler.connect(G.master);
+  G.sampEcho = c.createGain(); G.sampEcho.gain.value = .28; G.sampler.connect(G.sampEcho).connect(G.echo.in);
+  G.echoRet = c.createGain(); G.echoRet.gain.value = .5; G.echo.out.connect(G.echoRet).connect(G.master);
+  graph = G; routeFx(); applyMix(); return G;
+}
+function routeFx() {
+  const G = graph; if (!G) return;
+  try { G.send.disconnect(); } catch (e) {}
+  if (G[MIX.fx]) G.send.connect(G[MIX.fx].in);
 }
 function applyMix() {
   const r = 1 + MIX.tempo / 100;
-  audio.volume = MIX.vol / 100; audio.playbackRate = r;
-  if (graph) {
-    const t = graph.c.currentTime, f = MIX.filter / 100, F = graph.filt;
-    graph.vol.gain.setTargetAtTime(MIX.vol / 100, t, .02);
-    if (Math.abs(f) < .05) { F.type = "lowpass"; F.frequency.setTargetAtTime(22000, t, .03); F.Q.value = .7; }
-    else if (f < 0) { F.type = "lowpass"; F.frequency.setTargetAtTime(18000 * Math.pow(250 / 18000, -f), t, .03); F.Q.value = 6; }
-    else { F.type = "highpass"; F.frequency.setTargetAtTime(30 * Math.pow(5000 / 30, f), t, .03); F.Q.value = 6; }
+  audio.volume = Math.min(1, MIX.vol / 100); audio.playbackRate = r;
+  const G = graph;
+  if (G) {
+    const t = G.c.currentTime, tc = .03;
+    G.vol.gain.setTargetAtTime(Math.pow(MIX.vol / 100, 1.6) * 1.15, t, tc);
+    const eq = v => v < 0 ? v / 100 * 32 : v / 100 * 9;
+    G.low.gain.setTargetAtTime(eq(MIX.low), t, tc); G.mid.gain.setTargetAtTime(eq(MIX.mid), t, tc); G.hi.gain.setTargetAtTime(eq(MIX.hi), t, tc);
+    const f = MIX.filter / 100, F = G.filt;
+    if (Math.abs(f) < .04) { F.type = "lowpass"; F.frequency.setTargetAtTime(22000, t, tc); F.Q.value = .7; }
+    else if (f < 0) { F.type = "lowpass"; F.frequency.setTargetAtTime(19000 * Math.pow(180 / 19000, -f), t, tc); F.Q.value = 9; }
+    else { F.type = "highpass"; F.frequency.setTargetAtTime(25 * Math.pow(6000 / 25, f), t, tc); F.Q.value = 9; }
+    const w = MIX.wet / 100, trans = MIX.fx === "trans";
+    G.send.gain.setTargetAtTime(MIX.fxOn && !trans ? 1 : 0, t, .01);
+    G.wet.gain.setTargetAtTime(w * 1.3, t, tc);
+    G.transDepth.gain.setTargetAtTime(MIX.fxOn && trans ? w * .5 : 0, t, .005);
+    G.gate.gain.setTargetAtTime(MIX.fxOn && trans ? 1 - w * .5 : 1, t, .005);
   }
   deck.setRate();
 }
@@ -330,6 +393,7 @@ function reverseBuf(c, b) {
   for (let ch = 0; ch < b.numberOfChannels; ch++) { const s = b.getChannelData(ch), d = r.getChannelData(ch); for (let i = 0, n = s.length; i < n; i++) d[i] = s[n - 1 - i]; }
   return r;
 }
+const BRAKE = 1.1;
 const deck = {
   mode: "none", buf: null, rbuf: null, src: null, t0: 0, off: 0, playing: false, rate: 1, brake: null,
   dur() { return this.mode === "buf" ? this.buf.duration : (isFinite(audio.duration) ? audio.duration : PREVIEW); },
@@ -353,14 +417,14 @@ const deck = {
       if (my !== loadToken) return false;
       this.mode = "el"; audio.src = url; try { audio.load(); } catch (e2) {}
     }
-    applyMix(); return true;
+    applyMix(); renderMixer(); return true;
   },
   play() {
     this.brake = null;
     if (this.mode === "buf") {
       const g = getGraph(); this._kill();
       const s = g.c.createBufferSource(); s.buffer = this.buf; this.rate = 1 + MIX.tempo / 100; s.playbackRate.value = this.rate;
-      s.connect(g.filt); s.start(0, clamp(this.off, 0, this.dur() - .01)); this.t0 = g.c.currentTime; this.src = s; this.playing = true;
+      s.connect(g.input); s.start(0, clamp(this.off, 0, this.dur() - .01)); this.t0 = g.c.currentTime; this.src = s; this.playing = true;
       s.onended = () => { if (this.src === s) { this.off = this.time(); this.playing = false; this.src = null; stop(); } };
       return Promise.resolve();
     }
@@ -385,75 +449,142 @@ const deck = {
   },
   stop() { this.pause(); this.off = 0; },
 };
-const BRAKE = 1.1;
 function rateNow() { if (!deck.playing) return 0; if (deck.brake) return Math.max(0, deck.rate * (1 - (performance.now() - deck.brake) / 1000 / BRAKE)); return deck.rate; }
 
 /* ---------- Scratch ---------- */
 const scr = { src: null, g: null, dir: 0, last: 0, noise: null, nf: null, ng: null };
 function noiseInit() {
-  const c = getGraph() && graph.c; if (!c || scr.noise) return;
-  const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0);
-  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < .02 ? 1 : .35);
-  const s = c.createBufferSource(); s.buffer = b; s.loop = true;
-  scr.nf = c.createBiquadFilter(); scr.nf.type = "bandpass"; scr.nf.Q.value = 3;
-  scr.ng = c.createGain(); scr.ng.gain.value = 0;
-  s.connect(scr.nf).connect(scr.ng).connect(graph.vol); s.start(); scr.noise = s;
+  const G = getGraph(); if (!G || scr.noise) return;
+  const s = G.c.createBufferSource(); s.buffer = getNoise(G.c); s.loop = true;
+  scr.nf = G.c.createBiquadFilter(); scr.nf.type = "bandpass"; scr.nf.Q.value = 2.5;
+  scr.ng = G.c.createGain(); scr.ng.gain.value = 0;
+  s.connect(scr.nf).connect(scr.ng).connect(G.vol); s.start(); scr.noise = s;
 }
-function scratchStart() {
-  if (!S.scratch) return; const g = getGraph(); if (!g) return;
-  if (deck.mode === "buf") { scr.g = g.c.createGain(); scr.g.gain.value = 0; scr.g.connect(g.filt); scr.dir = 0; }
-  noiseInit();
+function scratchStart(force) {
+  if (!S.scratch && !force) return; const G = getGraph(); if (!G) return;
+  if (deck.mode === "buf") { scr.g = G.c.createGain(); scr.g.gain.value = 0; scr.g.connect(G.input); scr.dir = 0; }
+  noiseInit(); scr.on = true;
 }
 function scratchMove(t, v) {
-  if (!S.scratch || !graph) return;
+  if (!scr.on || !graph || !isFinite(v) || !isFinite(t)) return;
   const c = graph.c, now = c.currentTime, sp = Math.min(4, Math.abs(v));
   scr.last = performance.now();
-  if (scr.ng) { scr.ng.gain.setTargetAtTime(deck.mode === "buf" ? Math.min(.05, sp * .02) : Math.min(.35, sp * .14), now, .015); scr.nf.frequency.setTargetAtTime(300 + sp * 900, now, .02); }
+  if (scr.ng) { scr.ng.gain.setTargetAtTime(deck.mode === "buf" ? Math.min(.06, sp * .025) : Math.min(.5, sp * .2), now, .012); scr.nf.frequency.setTargetAtTime(250 + sp * 1100, now, .015); }
   if (deck.mode !== "buf" || !scr.g) return;
   const dir = v >= 0 ? 1 : -1;
   if (dir !== scr.dir || !scr.src) {
-    if (scr.src) { const o = scr.src; try { o.stop(now + .01); } catch (e) {} }
+    if (scr.src) { const o = scr.src; try { o.stop(now + .008); } catch (e) {} }
     const s = c.createBufferSource(); s.buffer = dir > 0 ? deck.buf : deck.rbuf; s.connect(scr.g);
     s.playbackRate.value = Math.max(.02, sp);
     s.start(0, clamp(dir > 0 ? t : deck.dur() - t, 0, deck.dur() - .01)); scr.src = s; scr.dir = dir;
-  } else scr.src.playbackRate.setTargetAtTime(Math.max(.02, sp), now, .012);
-  scr.g.gain.setTargetAtTime(sp < .04 ? 0 : Math.min(1, .35 + sp * .4), now, .01);
+  } else scr.src.playbackRate.setTargetAtTime(Math.max(.02, sp), now, .01);
+  scr.g.gain.setTargetAtTime(sp < .04 ? 0 : Math.min(1.3, .45 + sp * .45), now, .008);
 }
-function scratchIdle() { // Finger steht still -> leise
-  if (!graph || performance.now() - scr.last < 60) return;
+function scratchIdle() {
+  if (!graph || !scr.on || performance.now() - scr.last < 60) return;
   const now = graph.c.currentTime;
   if (scr.g) scr.g.gain.setTargetAtTime(0, now, .015);
   if (scr.src) scr.src.playbackRate.setTargetAtTime(.02, now, .02);
   if (scr.ng) scr.ng.gain.setTargetAtTime(0, now, .02);
 }
 function scratchEnd() {
-  if (!graph) return; const now = graph.c.currentTime;
+  scr.on = false; if (!graph) return; const now = graph.c.currentTime;
   if (scr.g) { scr.g.gain.setTargetAtTime(0, now, .01); const s = scr.src, g = scr.g; setTimeout(() => { try { s && s.stop(); } catch (e) {} g.disconnect(); }, 120); }
   if (scr.ng) scr.ng.gain.setTargetAtTime(0, now, .02);
   scr.src = null; scr.g = null; scr.dir = 0;
 }
 
-/* ---------- Effekte am Mischpult ---------- */
-function airHorn() {
-  const c = getGraph() && graph.c; if (!c) return;
-  [0, .28, .56].forEach((d, k) => {
-    const t = c.currentTime + d, len = k === 2 ? .55 : .22, g = c.createGain();
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.16, t + .02); g.gain.setValueAtTime(.16, t + len - .05); g.gain.linearRampToValueAtTime(0, t + len);
-    const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2600; f.connect(g).connect(graph.vol);
-    [440, 554, 659, 880].forEach(fr => { const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.setValueAtTime(fr * .94, t); o.frequency.exponentialRampToValueAtTime(fr, t + .06); o.connect(f); o.start(t); o.stop(t + len + .02); });
-  });
+/* ---------- Sampler: laute Club-Sounds ---------- */
+function env(g, t, a, peak, hold, rel) { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + hold); g.gain.exponentialRampToValueAtTime(.0001, t + a + hold + rel); }
+function osc(c, type, f, dest, t, len) { const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.connect(dest); o.start(t); o.stop(t + len); return o; }
+function noiseSrc(c, dest, t, len) { const s = c.createBufferSource(); s.buffer = getNoise(c); s.loop = true; s.connect(dest); s.start(t); s.stop(t + len); return s; }
+const SAMPLES = {
+  horn() { // Reggae-Airhorn: da-da-da daaaa
+    const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01;
+    const pre = c.createGain(); pre.gain.value = .5; const dr = makeDrive(c, 5);
+    const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 220;
+    const pk = c.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = 1800; pk.gain.value = 6;
+    const post = c.createGain(); post.gain.value = .85;
+    pre.connect(dr).connect(hp).connect(pk).connect(post).connect(G.sampler);
+    [[0, .12], [.16, .12], [.32, .12], [.48, .9]].forEach(([d, len], i) => {
+      const g = c.createGain(); g.connect(pre); env(g, T + d, .012, 1, len - .05, .09);
+      [1, 1.007, .993, 1.498, 2.004].forEach(m => {
+        const o = osc(c, "sawtooth", 466 * m * .9, g, T + d, len + .15);
+        o.frequency.exponentialRampToValueAtTime(466 * m, T + d + .035);
+        if (i === 3) o.frequency.setTargetAtTime(466 * m * .86, T + d + len - .2, .1);
+      });
+    });
+  },
+  siren() { // Dub-Siren mit Echo
+    const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01, L = 2.4;
+    const g = c.createGain(); env(g, T, .02, .55, L - .3, .3);
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200; g.connect(lp).connect(G.sampler);
+    const e = c.createGain(); e.gain.value = .7; lp.connect(e).connect(G.echo.in);
+    const o = osc(c, "square", 520, g, T, L);
+    o.frequency.linearRampToValueAtTime(980, T + L);
+    const l = c.createOscillator(); l.frequency.setValueAtTime(3, T); l.frequency.linearRampToValueAtTime(9, T + L);
+    const lg = c.createGain(); lg.gain.value = 260; l.connect(lg).connect(o.frequency); l.start(T); l.stop(T + L);
+  },
+  laser() { // pew pew pew
+    const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01;
+    const dr = makeDrive(c, 4), out = c.createGain(); out.gain.value = .6; dr.connect(out).connect(G.sampler);
+    const e = c.createGain(); e.gain.value = .5; out.connect(e).connect(G.echo.in);
+    [0, .14, .28, .42].forEach((d, i) => {
+      const g = c.createGain(); g.connect(dr); env(g, T + d, .004, .9, .02, .2);
+      const o = osc(c, i % 2 ? "sawtooth" : "square", 3200 - i * 300, g, T + d, .3);
+      o.frequency.exponentialRampToValueAtTime(90, T + d + .24);
+    });
+  },
+  drop() { // Bass-Drop mit Impact
+    const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01;
+    const dr = makeDrive(c, 3.5), out = c.createGain(); out.gain.value = 1; dr.connect(out).connect(G.sampler);
+    const g = c.createGain(); g.connect(dr); env(g, T, .005, 1, .25, 2.3);
+    const o = osc(c, "sine", 170, g, T, 2.8); o.frequency.exponentialRampToValueAtTime(34, T + 1.6);
+    const o2 = osc(c, "triangle", 85, g, T, 2.8); o2.frequency.exponentialRampToValueAtTime(30, T + 1.6);
+    const nf = c.createBiquadFilter(); nf.type = "lowpass"; nf.frequency.setValueAtTime(6000, T); nf.frequency.exponentialRampToValueAtTime(120, T + .6);
+    const ng = c.createGain(); env(ng, T, .002, .9, .02, .7); nf.connect(ng).connect(G.sampler); noiseSrc(c, nf, T, .9);
+    const rv = c.createGain(); rv.gain.value = .5; ng.connect(rv).connect(G.reverb.in); G.reverb.out.connect(G.master);
+    setTimeout(() => { try { G.reverb.out.disconnect(G.master); } catch (e) {} G.reverb.out.connect(G.wet); }, 3500);
+  },
+  riser() { // Build-up: Rauschen und Synth steigen, Song wird mitgefiltert
+    const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01, L = 3.2;
+    const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 3; bp.frequency.setValueAtTime(300, T); bp.frequency.exponentialRampToValueAtTime(9000, T + L);
+    const ng = c.createGain(); ng.gain.setValueAtTime(.02, T); ng.gain.exponentialRampToValueAtTime(.9, T + L); ng.gain.setValueAtTime(.0001, T + L + .02);
+    bp.connect(ng).connect(G.sampler); noiseSrc(c, bp, T, L + .05);
+    const sg = c.createGain(); sg.gain.setValueAtTime(.02, T); sg.gain.exponentialRampToValueAtTime(.25, T + L); sg.gain.setValueAtTime(.0001, T + L + .02); sg.connect(G.sampler);
+    [1, 1.01].forEach(m => { const o = osc(c, "sawtooth", 110 * m, sg, T, L + .05); o.frequency.exponentialRampToValueAtTime(1320 * m, T + L); });
+    const F = G.filt; F.type = "highpass"; F.Q.value = 6; F.frequency.cancelScheduledValues(T); F.frequency.setValueAtTime(30, T); F.frequency.exponentialRampToValueAtTime(2200, T + L);
+    setTimeout(() => { applyMix(); SAMPLES.drop(); }, L * 1000);
+  },
+  scratch() { autoScratch(); },
+  rewind() { rewind(); },
+  brake() { brake(); },
+};
+function autoScratch() {
+  if (!P || !P.ready || P.spinning) return;
+  const pos = deck.time(), was = deck.playing; deck.pause(); scratchStart(true);
+  const strokes = [1, -1, 1, -1, 1, 1, -1, -1, 1, -1], len = .11, t0 = performance.now(), r0 = P.rot;
+  let p = pos; P.spinning = true; let last = t0;
+  (function f(now) {
+    const e = Math.max(0, now - t0) / 1000, i = Math.floor(e / len);
+    if (i >= strokes.length) { scratchEnd(); P.spinning = false; P.rot = r0; deck.seek(pos); if (was) startPlay(); return; }
+    const ph = (e % len) / len, v = strokes[i] * 2.6 * Math.sin(Math.PI * ph);
+    const dt = Math.max(0, now - last) / 1000; last = Math.max(last, now); p = clamp(p + v * dt, 0, deck.dur() - .05);
+    scratchMove(p, v); P.rot += v * dt * DPS; setRing(p);
+    requestAnimationFrame(f);
+  })(t0);
 }
 function rewind() {
-  if (!P || !P.dz || deck.mode === "none") return;
-  const t = deck.time(), was = true; if (t < .3) { deck.seek(0); return; }
-  deck.pause(); scratchStart();
-  const dur = Math.min(.9, .25 + t * .05), v = -t / dur, t0 = performance.now(), r0 = P.rot;
+  if (!P || !P.ready || P.spinning) return;
+  const t = deck.time(); if (t < .3) { deck.seek(0); return; }
+  deck.pause(); scratchStart(true);
+  const dur = Math.min(1, .35 + t * .05), v = -t / dur, t0 = performance.now(), r0 = P.rot;
   P.spinning = true;
   (function f(now) {
-    const k = Math.min(1, (now - t0) / 1000 / dur), pos = t * (1 - k);
+    const k = clamp((now - t0) / 1000 / dur, 0, 1), pos = t * (1 - k);
     P.rot = r0 - t * DPS * k; setRing(pos);
     if (k < 1) { scratchMove(pos, v); requestAnimationFrame(f); }
-    else { scratchEnd(); P.spinning = false; deck.seek(0); if (was) startPlay(); }
+    else { scratchEnd(); P.spinning = false; deck.seek(0); startPlay(); }
   })(t0);
 }
 function brake() {
@@ -471,7 +602,12 @@ let R = null, P = null, playing = false, dragging = false, lastTs = 0;
 
 function startRound(o) {
   getGraph();
-  const pool = o.keepOrder ? o.songs.slice() : shuffle(o.songs.slice());
+  // Gerade gespielte Songs kommen erst wieder, wenn alle anderen dran waren
+  const seenKey = "mq-seen-" + o.genre.id, sk = s => s[0] + "|" + s[1];
+  let seen = new Set(store.get(seenKey, []));
+  const fresh = o.songs.filter(s => !seen.has(sk(s)));
+  if (!o.keepOrder && fresh.length < Math.min(S.count, o.songs.length)) { seen = new Set(); store.set(seenKey, []); }
+  const pool = o.keepOrder ? o.songs.slice() : [...shuffle(o.songs.filter(s => !seen.has(sk(s)))), ...shuffle(o.songs.filter(s => seen.has(sk(s))))];
   const n = o.daily ? 5 : o.mode === "sudden" ? pool.length : Math.min(S.count, pool.length);
   const pl = o.mode === "party" ? players.map((p, i) => ({ name: p.trim() || "Spieler " + (i + 1), score: 0 })) : [{ name: S.name.trim() || "Du", score: 0 }];
   R = { genre: o.genre, mode: o.mode, daily: !!o.daily, practice: !!o.practice, items: pool.splice(0, n).map(s => ({ song: s })), pool, idx: 0,
@@ -529,6 +665,7 @@ async function loadSong() {
   const ok = await deck.load(dz.preview);
   if (!ok || myP !== P) return;
   P.ready = true;
+  if (!R.daily && !R.genre.live) { const k = "mq-seen-" + R.genre.id, l = store.get(k, []); l.push(it.song[0] + "|" + it.song[1]); store.set(k, l.slice(-400)); }
   renderTop(); setRing(0);
   const nx = R.items[R.idx + 1]; if (nx) lookup(nx.song);
   if (S.autoplay && !(handoff && !$("#handoff").classList.contains("hide"))) startPlay();
@@ -616,26 +753,109 @@ function showCover(paid) {
   if (!paid) { toast("Cover-Hinweis aufgedeckt"); SFX.hint(); }
 }
 
-/* ---------- Mischpult-Bedienung ---------- */
-function renderMixer() {
-  $("#mxVol").value = MIX.vol; $("#mxTempo").value = MIX.tempo; $("#mxFilter").value = MIX.filter;
-  $("#mxVolV").textContent = MIX.vol;
-  $("#mxTempoV").textContent = (MIX.tempo > 0 ? "+" : "") + MIX.tempo + " %";
-  $("#mxFilterV").textContent = Math.abs(MIX.filter) < 5 ? "aus" : MIX.filter < 0 ? "Bass" : "Höhen";
-  $("#mxFilterRow").classList.toggle("off", deck.mode === "el");
+/* ---------- DJ-Mixer: Bedienung ---------- */
+const KNOBS = { hi: [-100, 100, 0], mid: [-100, 100, 0], low: [-100, 100, 0], filter: [-100, 100, 0], wet: [0, 100, 55] };
+const FADERS = { vol: [0, 100, 85], tempo: [-16, 16, 0] };
+const PADS = [["horn", "Horn"], ["siren", "Siren"], ["laser", "Laser"], ["drop", "Drop"], ["riser", "Riser"], ["scratch", "Scratch"], ["rewind", "Rewind"], ["brake", "Brake"]];
+const FXS = [["echo", "Echo"], ["reverb", "Reverb"], ["flanger", "Flanger"], ["trans", "Trans"]];
+let lcdUntil = 0, lcdMsg = "";
+const lcd = m => { lcdMsg = m; lcdUntil = performance.now() + 1500; };
+const fmtVal = k => {
+  const v = MIX[k];
+  if (k === "hi" || k === "mid" || k === "low") return k.toUpperCase() + " " + (v <= -97 ? "KILL" : (v === 0 ? "0" : (v > 0 ? "+" : "") + (v < 0 ? v / 100 * 32 : v / 100 * 9).toFixed(1)) + " dB");
+  if (k === "filter") { if (Math.abs(v) < 4) return "FILTER OFF"; const f = v < 0 ? 19000 * Math.pow(180 / 19000, -v / 100) : 25 * Math.pow(6000 / 25, v / 100); return (v < 0 ? "LPF " : "HPF ") + (f >= 1000 ? (f / 1000).toFixed(1) + "k" : Math.round(f)) + " Hz"; }
+  if (k === "wet") return "FX LEVEL " + v + "%";
+  if (k === "vol") return "CH VOL " + v;
+  if (k === "tempo") return "TEMPO " + (v > 0 ? "+" : "") + v.toFixed(1) + "%";
+  return "";
+};
+function buildMixer() {
+  const knob = (k, l, cls = "") => `<div class="knob ${cls}" data-k="${k}"><div class="kring"></div><div class="kcap"><i></i></div><span>${l}</span></div>`;
+  const leds = n => Array.from({ length: n }, (_, i) => `<i class="${i >= n - 2 ? "lr" : i >= n - 5 ? "ly" : "lg"}"></i>`).join("");
+  $("#mixer").innerHTML = `
+    <div class="mx-head"><span class="brand">QM<b>·</b>900</span><div class="lcd" id="lcd"></div></div>
+    <div class="mx-main">
+      <div class="mx-eq eqfx">${knob("hi", "Hi")}${knob("mid", "Mid")}${knob("low", "Low")}${knob("filter", "Filter", "color")}</div>
+      <div class="vu" id="vu"><div>${leds(14)}</div><div>${leds(14)}</div></div>
+      <div class="fader" data-k="vol"><div class="slot"></div><div class="cap"></div><span>Vol</span></div>
+      <div class="fader tempo" data-k="tempo"><div class="slot"></div><div class="cap"></div><span>Tempo</span></div>
+    </div>
+    <div class="mx-fx eqfx">
+      <div class="fxsel">${FXS.map(([k, l]) => `<button data-fx="${k}"><i></i>${l}</button>`).join("")}</div>
+      ${knob("wet", "Level")}
+      <button class="fxon" id="fxOn">On</button>
+    </div>
+    <div class="pads">${PADS.map(([k, l]) => `<button class="pad pad-${k}" data-pad="${k}">${l}</button>`).join("")}</div>`;
+  renderMixer();
 }
-$("#mixer").addEventListener("input", e => {
-  const k = { mxVol: "vol", mxTempo: "tempo", mxFilter: "filter" }[e.target.id]; if (!k) return;
-  MIX[k] = +e.target.value; if (k === "filter" && Math.abs(MIX.filter) < 6) MIX.filter = 0;
-  store.set("mq-mix", MIX); applyMix(); renderMixer();
+function renderMixer() {
+  if (!$("#lcd")) return;
+  $$("#mixer .knob").forEach(el => {
+    const k = el.dataset.k, [mn, mx] = KNOBS[k], v = MIX[k], a = -135 + (v - mn) / (mx - mn) * 270;
+    el.querySelector(".kcap").style.transform = `rotate(${a}deg)`;
+    const from = mn < 0 ? Math.min(0, a) : -135, span = Math.max(1.5, (mn < 0 ? Math.max(0, a) : a) - from);
+    el.querySelector(".kring").style.background = `conic-gradient(from ${from}deg, var(--led) 0deg ${span}deg, transparent ${span}deg), conic-gradient(from -135deg, #ffffff16 0deg 270deg, transparent 270deg)`;
+  });
+  $$("#mixer .fader").forEach(el => { const k = el.dataset.k, [mn, mx] = FADERS[k]; el.querySelector(".cap").style.setProperty("--p", `calc((100% - 1.65rem) * ${1 - (MIX[k] - mn) / (mx - mn)})`); });
+  $$("#mixer [data-fx]").forEach(b => b.classList.toggle("on", b.dataset.fx === MIX.fx));
+  $("#fxOn").classList.toggle("on", MIX.fxOn);
+  $("#mixer").classList.toggle("lite", deck.mode === "el");
+}
+function setMix(k, v) { MIX[k] = v; store.set("mq-mix2", Object.assign({}, MIX, { fxOn: false })); applyMix(); renderMixer(); lcd(fmtVal(k)); }
+
+// Drehregler & Fader: ziehen, Doppeltipp setzt zurück
+let ctl = null, lastTap = { k: null, t: 0 };
+$("#mixer").addEventListener("pointerdown", e => {
+  const el = e.target.closest(".knob,.fader"); if (!el) return;
+  e.preventDefault(); getGraph();
+  const k = el.dataset.k, isK = el.classList.contains("knob"), [mn, mx, def] = (isK ? KNOBS : FADERS)[k];
+  const now = performance.now();
+  if (lastTap.k === k && now - lastTap.t < 320) { setMix(k, def); lastTap.k = null; return; }
+  lastTap = { k, t: now };
+  el.setPointerCapture(e.pointerId);
+  ctl = { el, k, isK, mn, mx, y0: e.clientY, v0: MIX[k] };
+  if (!isK) { const r = el.querySelector(".slot").getBoundingClientRect(); setMix(k, snap(k, mn + (1 - clamp((e.clientY - r.top) / r.height, 0, 1)) * (mx - mn))); }
 });
+const snap = (k, v) => k === "tempo" ? (Math.abs(v) < .6 ? 0 : Math.round(v * 10) / 10) : k === "filter" ? (Math.abs(v) < 5 ? 0 : Math.round(v)) : Math.round(v);
+$("#mixer").addEventListener("pointermove", e => {
+  if (!ctl) return;
+  if (ctl.isK) setMix(ctl.k, snap(ctl.k, clamp(ctl.v0 + (ctl.y0 - e.clientY) / 160 * (ctl.mx - ctl.mn), ctl.mn, ctl.mx)));
+  else { const r = ctl.el.querySelector(".slot").getBoundingClientRect(); setMix(ctl.k, snap(ctl.k, ctl.mn + (1 - clamp((e.clientY - r.top) / r.height, 0, 1)) * (ctl.mx - ctl.mn))); }
+});
+["pointerup", "pointercancel"].forEach(ev => $("#mixer").addEventListener(ev, () => { ctl = null; }));
 $("#mixer").addEventListener("click", e => {
-  const r = e.target.closest("[data-reset]");
-  if (r) { MIX[r.dataset.reset] = r.dataset.reset === "vol" ? 90 : 0; store.set("mq-mix", MIX); applyMix(); renderMixer(); SFX.tap(); return; }
+  const fx = e.target.closest("[data-fx]");
+  if (fx) { MIX.fx = fx.dataset.fx; routeFx(); applyMix(); renderMixer(); lcd(fx.textContent.toUpperCase() + (MIX.fxOn ? " ON" : "")); return; }
+  if (e.target.closest("#fxOn")) { getGraph(); MIX.fxOn = !MIX.fxOn; routeFx(); applyMix(); renderMixer(); lcd(MIX.fx.toUpperCase() + (MIX.fxOn ? " ON" : " OFF")); return; }
   const p = e.target.closest("[data-pad]"); if (!p) return;
   getGraph(); p.classList.remove("hit"); void p.offsetWidth; p.classList.add("hit");
-  ({ rewind, brake, horn: airHorn })[p.dataset.pad]();
+  lcd(p.textContent.toUpperCase() + "!"); SAMPLES[p.dataset.pad]();
 });
+
+// VU-Meter & Display
+const vuBuf = new Float32Array(512); let vuPeak = [0, 0];
+(function vuLoop() {
+  requestAnimationFrame(vuLoop);
+  const m = $("#mixer"); if (!m || !R || m.offsetParent === null) return;
+  const lv = [0, 0];
+  if (graph) [graph.anL, graph.anR].forEach((an, i) => {
+    an.getFloatTimeDomainData(vuBuf); let s = 0; for (let j = 0; j < vuBuf.length; j++) s += vuBuf[j] * vuBuf[j];
+    const db = 20 * Math.log10(Math.sqrt(s / vuBuf.length) + 1e-6); lv[i] = clamp((db + 42) / 42, 0, 1);
+  });
+  if (deck.mode === "el" && deck.playing) { const f = .55 + Math.random() * .25; lv[0] = Math.max(lv[0], f * MIX.vol / 100); lv[1] = Math.max(lv[1], (f + (Math.random() - .5) * .08) * MIX.vol / 100); }
+  $$("#vu > div").forEach((col, i) => {
+    vuPeak[i] = Math.max(lv[i], vuPeak[i] - .012);
+    const n = Math.round(lv[i] * 14), pk = Math.round(vuPeak[i] * 14) - 1;
+    [...col.children].forEach((led, j) => led.classList.toggle("on", j < n || j === pk));
+  });
+  const el = $("#lcd");
+  if (performance.now() < lcdUntil) el.textContent = lcdMsg;
+  else {
+    const t = P && P.ready ? deck.time() : 0;
+    el.textContent = deck.mode === "el" ? `A ${fmt(t)}  LITE · EQ/FX AUS` : `A ${fmt(t)}  ${MIX.tempo >= 0 ? "+" : ""}${MIX.tempo.toFixed(1)}%  ${MIX.fxOn ? MIX.fx.toUpperCase() + " ON" : "FX OFF"}`;
+  }
+})();
+buildMixer();
 
 /* ---------- Jahre ---------- */
 function makeYears(years) {

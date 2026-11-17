@@ -56,5 +56,23 @@ GENRES.push({
     ["Bebe Rexha","New Religion",[2026]],
     ["Harry Styles","American Girls",[2026]],
     ["David Guetta, Teddy Swims & Tones And I","Gone Gone Gone",[2026]],
+    ["ROSÉ & Bruno Mars", "APT.", [2024, 2025]],
+    ["Lady Gaga & Bruno Mars", "Die with a Smile", [2024, 2025]],
+    ["Billie Eilish", "Birds of a Feather", [2024, 2025]],
+    ["Gracie Abrams", "That's So True", [2024, 2025]],
+    ["Lady Gaga", "Abracadabra", [2025]],
+    ["Sabrina Carpenter", "Manchild", [2025]],
+    ["Ed Sheeran", "Sapphire", [2025]],
+    ["Jazeek & Lune", "Ma Baby 2", [2025]],
+    ["David Guetta & Sia", "Beautiful People", [2025]],
+    ["CRO & jolle", "Märchenwald", [2025]],
+    ["Selena Gomez, benny blanco & Gracie Abrams", "Call Me When You Break Up", [2025]],
+    ["Kygo & OneRepublic", "Chasing Paradise", [2025]],
+    ["Zoe Wees", "Traitor", [2025]],
+    ["Robin Schulz & FAST BOY", "Million Good Reasons", [2025]],
+    ["Alok & Jess Glynne", "Summer's Back", [2025]],
+    ["Oliver Heldens", "Lady (Hear Me Tonight)", [2025]],
+    ["Michael Patrick Kelly", "The One", [2025]],
+    ["Linkin Park", "The Emptiness Machine", [2024, 2025]]
   ]
 });
