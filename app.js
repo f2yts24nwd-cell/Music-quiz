@@ -304,8 +304,9 @@ function startDaily() {
 const audio = new Audio(); audio.preload = "auto"; audio.setAttribute("playsinline", "");
 audio.preservesPitch = false; audio.webkitPreservesPitch = false;
 try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {} // iPhone: auch im Lautlos-Modus hörbar
-const MIX = Object.assign({ vol: 85, tempo: 0, hi: 0, mid: 0, low: 0, filter: 0, fx: "echo", wet: 55, fxOn: false }, store.get("mq-mix2", {}));
-MIX.fxOn = false;
+const MIX_DEFAULT = { vol: 85, tempo: 0, hi: 0, mid: 0, low: 0, filter: 0, fx: "echo", wet: 55, fxOn: false };
+const MIX = Object.assign({}, MIX_DEFAULT);
+let WAVE = null; // Wellenform des aktuellen Songs
 let graph = null, loadToken = 0, noiseBuf = null;
 
 function makeImpulse(c, sec = 2.8, decay = 3.2) {
@@ -387,6 +388,21 @@ function applyMix() {
   }
   deck.setRate();
 }
+// Wellenform wie in Rekordbox: Höhe = Lautstärke, Farbe = Klang (rot = Bass, blau = Höhen)
+function computeWave(b, bins = 900) {
+  const d = b.getChannelData(0), step = Math.floor(d.length / bins), amp = new Float32Array(bins), hue = new Float32Array(bins);
+  for (let i = 0; i < bins; i++) {
+    let pk = 0, zc = 0, prev = 0;
+    for (let j = i * step, e = j + step; j < e; j += 2) { const v = d[j]; const av = v < 0 ? -v : v; if (av > pk) pk = av; if ((v >= 0) !== (prev >= 0)) zc++; prev = v; }
+    amp[i] = pk; hue[i] = Math.min(1, zc / (step / 2) * 9);
+  }
+  return { amp, hue, dur: b.duration };
+}
+function fakeWave(seed) {
+  const r = seeded(String(seed)), bins = 900, amp = new Float32Array(bins), hue = new Float32Array(bins);
+  for (let i = 0; i < bins; i++) { amp[i] = .25 + .6 * Math.abs(Math.sin(i / 7)) * r(); hue[i] = r(); }
+  return { amp, hue, dur: PREVIEW, fake: true };
+}
 const decodeBuf = (c, ab) => new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
 function reverseBuf(c, b) {
   const r = c.createBuffer(b.numberOfChannels, b.length, b.sampleRate);
@@ -412,9 +428,10 @@ const deck = {
       const r = await fetch(url, { mode: "cors" }); if (!r.ok) throw 0;
       const b = await decodeBuf(g.c, await r.arrayBuffer());
       if (my !== loadToken) return false;
-      this.buf = b; this.rbuf = reverseBuf(g.c, b); this.mode = "buf"; this.off = 0;
+      this.buf = b; this.rbuf = reverseBuf(g.c, b); this.mode = "buf"; this.off = 0; WAVE = computeWave(b);
     } catch (e) {
       if (my !== loadToken) return false;
+      WAVE = fakeWave(url);
       this.mode = "el"; audio.src = url; try { audio.load(); } catch (e2) {}
     }
     applyMix(); renderMixer(); return true;
@@ -620,7 +637,7 @@ function startRound(o) {
   $("#blitzBar").classList.toggle("hide", R.mode !== "blitz");
   $("#hintBtn").classList.toggle("hide", !R.hints);
   $("#mixer").classList.toggle("hide", !S.mixer);
-  renderMixer();
+  resetMixer(); setTimeout(sizeWave, 50);
   show("game");
   loadSong();
 }
@@ -638,7 +655,7 @@ function renderTop() {
 }
 
 async function loadSong() {
-  stop(); deck.stop(); loadToken++;
+  stop(); deck.stop(); loadToken++; resetMixer(); WAVE = null;
   P = { yearOpts: [], yearPick: null, struck: [], hints: [], played: 0, coverShown: false, stage: 0, blitzStart: null, seek: 0, rot: 0, dz: null, done: false, ready: false };
   $("#coverWrap").className = "cover"; $("#cover").style.backgroundImage = ""; $("#cover").style.filter = "";
   $("#guess").classList.remove("hide"); $("#reveal").classList.add("hide");
@@ -773,20 +790,49 @@ function buildMixer() {
   const knob = (k, l, cls = "") => `<div class="knob ${cls}" data-k="${k}"><div class="kring"></div><div class="kcap"><i></i></div><span>${l}</span></div>`;
   const leds = n => Array.from({ length: n }, (_, i) => `<i class="${i >= n - 2 ? "lr" : i >= n - 5 ? "ly" : "lg"}"></i>`).join("");
   $("#mixer").innerHTML = `
-    <div class="mx-head"><span class="brand">QM<b>·</b>900</span><div class="lcd" id="lcd"></div></div>
-    <div class="mx-main">
+    <div class="mx-screen">
+      <canvas id="wave"></canvas><canvas id="wavemini"></canvas>
+      <div class="mx-ov"><span id="lcd"></span><span id="lcdR"></span></div>
+    </div>
+    <div class="mx-body">
       <div class="mx-eq eqfx">${knob("hi", "Hi")}${knob("mid", "Mid")}${knob("low", "Low")}${knob("filter", "Filter", "color")}</div>
-      <div class="vu" id="vu"><div>${leds(14)}</div><div>${leds(14)}</div></div>
-      <div class="fader" data-k="vol"><div class="slot"></div><div class="cap"></div><span>Vol</span></div>
-      <div class="fader tempo" data-k="tempo"><div class="slot"></div><div class="cap"></div><span>Tempo</span></div>
+      <div class="mx-ch">
+        <div class="vu" id="vu"><div>${leds(15)}</div><div>${leds(15)}</div></div>
+        <div class="fader" data-k="vol"><div class="slot"></div><div class="cap"></div><span>Vol</span></div>
+        <div class="fader tempo" data-k="tempo"><div class="slot"></div><div class="cap"></div><span>Tempo</span></div>
+      </div>
+      <div class="mx-fx eqfx">
+        <span class="mx-lbl">Beat FX</span>
+        <div class="fxsel">${FXS.map(([k, l]) => `<button data-fx="${k}">${l}</button>`).join("")}</div>
+        <div class="fx-row">${knob("wet", "Level", "small")}<button class="fxon" id="fxOn">On</button></div>
+      </div>
     </div>
-    <div class="mx-fx eqfx">
-      <div class="fxsel">${FXS.map(([k, l]) => `<button data-fx="${k}"><i></i>${l}</button>`).join("")}</div>
-      ${knob("wet", "Level")}
-      <button class="fxon" id="fxOn">On</button>
-    </div>
-    <div class="pads">${PADS.map(([k, l]) => `<button class="pad pad-${k}" data-pad="${k}">${l}</button>`).join("")}</div>`;
-  renderMixer();
+    <div class="pads">${PADS.map(([k, l]) => `<button class="pad pad-${k}" data-pad="${k}"><b>${l}</b></button>`).join("")}</div>`;
+  sizeWave(); renderMixer();
+}
+function sizeWave() { ["#wave", "#wavemini"].forEach(s => { const c = $(s); if (!c) return; const r = c.getBoundingClientRect(); c.width = Math.max(1, r.width * devicePixelRatio); c.height = Math.max(1, r.height * devicePixelRatio); }); }
+addEventListener("resize", sizeWave);
+const waveCol = (h, a) => { const r = Math.round(255 * (1 - h) + 40 * h), g = Math.round(90 + 120 * Math.sin(h * Math.PI)), b = Math.round(60 + 195 * h); return `rgba(${r},${g},${b},${a})`; };
+function drawWave() {
+  const c = $("#wave"), m = $("#wavemini"); if (!c || !c.width) return;
+  const x = c.getContext("2d"), W = c.width, H = c.height, dpr = devicePixelRatio;
+  x.clearRect(0, 0, W, H);
+  const t = P && P.ready ? deck.time() : 0, lim = P && !P.done ? limit() : PREVIEW;
+  if (WAVE) {
+    const n = WAVE.amp.length, sec = 7, pps = W / sec, bw = Math.max(1, W / (sec * n / WAVE.dur));
+    for (let i = 0; i < n; i++) {
+      const ts = i / n * WAVE.dur, px = W / 2 + (ts - t) * pps; if (px < -bw || px > W + bw) continue;
+      const a = WAVE.amp[i] * (WAVE.fake ? .8 : 1), hh = Math.max(dpr, a * H * .46), past = ts < t, locked = ts > lim;
+      x.fillStyle = waveCol(WAVE.hue[i], locked ? .18 : past ? .55 : 1);
+      x.fillRect(px, H / 2 - hh, bw + .5, hh * 2);
+    }
+  }
+  x.fillStyle = "#fff"; x.fillRect(W / 2 - dpr, 0, 2 * dpr, H);
+  x.fillStyle = "#ff3d5a"; x.beginPath(); x.moveTo(W / 2 - 5 * dpr, 0); x.lineTo(W / 2 + 5 * dpr, 0); x.lineTo(W / 2, 6 * dpr); x.fill();
+  if (!m || !m.width) return;
+  const y = m.getContext("2d"), w = m.width, h = m.height; y.clearRect(0, 0, w, h);
+  if (WAVE) { const n = WAVE.amp.length; for (let i = 0; i < n; i += 2) { const px = i / n * w, ts = i / n * WAVE.dur, a = WAVE.amp[i] * h * .9; y.fillStyle = waveCol(WAVE.hue[i], ts > lim ? .15 : ts < t ? .9 : .45); y.fillRect(px, h - a, w / n * 2 + .5, a); } }
+  y.fillStyle = "#fff"; y.fillRect(t / PREVIEW * w, 0, 1.5 * dpr, h);
 }
 function renderMixer() {
   if (!$("#lcd")) return;
@@ -798,10 +844,12 @@ function renderMixer() {
   });
   $$("#mixer .fader").forEach(el => { const k = el.dataset.k, [mn, mx] = FADERS[k]; el.querySelector(".cap").style.setProperty("--p", `calc((100% - 1.65rem) * ${1 - (MIX[k] - mn) / (mx - mn)})`); });
   $$("#mixer [data-fx]").forEach(b => b.classList.toggle("on", b.dataset.fx === MIX.fx));
+  $$("#mixer .knob").forEach(el => el.classList.toggle("moved", MIX[el.dataset.k] !== KNOBS[el.dataset.k][2]));
   $("#fxOn").classList.toggle("on", MIX.fxOn);
   $("#mixer").classList.toggle("lite", deck.mode === "el");
 }
-function setMix(k, v) { MIX[k] = v; store.set("mq-mix2", Object.assign({}, MIX, { fxOn: false })); applyMix(); renderMixer(); lcd(fmtVal(k)); }
+function setMix(k, v) { MIX[k] = v; applyMix(); renderMixer(); lcd(fmtVal(k)); }
+function resetMixer() { Object.assign(MIX, MIX_DEFAULT); if (graph) { routeFx(); } applyMix(); renderMixer(); }
 
 // Drehregler & Fader: ziehen, Doppeltipp setzt zurück
 let ctl = null, lastTap = { k: null, t: 0 };
@@ -829,7 +877,7 @@ $("#mixer").addEventListener("click", e => {
   if (e.target.closest("#fxOn")) { getGraph(); MIX.fxOn = !MIX.fxOn; routeFx(); applyMix(); renderMixer(); lcd(MIX.fx.toUpperCase() + (MIX.fxOn ? " ON" : " OFF")); return; }
   const p = e.target.closest("[data-pad]"); if (!p) return;
   getGraph(); p.classList.remove("hit"); void p.offsetWidth; p.classList.add("hit");
-  lcd(p.textContent.toUpperCase() + "!"); SAMPLES[p.dataset.pad]();
+  lcd(p.textContent.trim().toUpperCase() + "!"); SAMPLES[p.dataset.pad]();
 });
 
 // VU-Meter & Display
@@ -848,12 +896,10 @@ const vuBuf = new Float32Array(512); let vuPeak = [0, 0];
     const n = Math.round(lv[i] * 14), pk = Math.round(vuPeak[i] * 14) - 1;
     [...col.children].forEach((led, j) => led.classList.toggle("on", j < n || j === pk));
   });
-  const el = $("#lcd");
-  if (performance.now() < lcdUntil) el.textContent = lcdMsg;
-  else {
-    const t = P && P.ready ? deck.time() : 0;
-    el.textContent = deck.mode === "el" ? `A ${fmt(t)}  LITE · EQ/FX AUS` : `A ${fmt(t)}  ${MIX.tempo >= 0 ? "+" : ""}${MIX.tempo.toFixed(1)}%  ${MIX.fxOn ? MIX.fx.toUpperCase() + " ON" : "FX OFF"}`;
-  }
+  const el = $("#lcd"), t = P && P.ready ? deck.time() : 0;
+  el.textContent = performance.now() < lcdUntil ? lcdMsg : deck.mode === "el" ? "LITE-MODUS · EQ & FX AUS" : MIX.fxOn ? MIX.fx.toUpperCase() + " ON" : "DECK A";
+  $("#lcdR").textContent = `${fmt(t)}  ${MIX.tempo >= 0 ? "+" : ""}${MIX.tempo.toFixed(1)}%`;
+  drawWave();
 })();
 buildMixer();
 
