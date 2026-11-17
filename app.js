@@ -93,7 +93,7 @@ const BAD_ALBUM = /\b(karaoke|tribute|cover|instrumental|workout|lullaby|8-bit|p
 async function loadExtra(g) {
   if (!g.dz) return [];
   if (g._extra) return g._extra;
-  const ck = "mq-dz2-" + g.id, cached = store.get(ck, null);
+  const ck = "mq-dz3-" + g.id, cached = store.get(ck, null);
   if (cached && Date.now() - cached.t < 3 * 864e5 && cached.s.length) return (g._extra = cached.s);
   const have = new Set(g.songs.map(s => songKey(s[0], s[1]))), out = [];
   const lists = (await Promise.allSettled(g.dz.map(q => jsonp("search/playlist?limit=6&q=" + encodeURIComponent(q)))))
@@ -130,11 +130,11 @@ async function resolveYear(song) {
 }
 // Song vorbereiten: Vorschau + Jahr (für den nächsten Song schon im Hintergrund)
 const prepCache = new Map();
-function prepare(song) {
-  const key = song[0] + "|" + song[1];
-  if (prepCache.has(key)) return prepCache.get(key);
-  const p = (async () => { const dz = await lookup(song); if (!dz) return null; let years = song[2]; if (!years) { const y = await resolveYear(song); if (!y) return null; years = [y]; } return { dz, years }; })();
-  prepCache.set(key, p); return p;
+function prepare(song, force) {
+  const key = song[0] + "|" + song[1], c = prepCache.get(key);
+  if (!force && c && Date.now() - c.t < FRESH) return c.p;
+  const p = (async () => { const dz = await lookup(song, force); if (!dz) return null; let years = song[2]; if (!years) { const y = await resolveYear(song); if (!y) return null; years = [y]; } return { dz, years }; })();
+  prepCache.set(key, { t: Date.now(), p }); return p;
 }
 
 /* ============================ Textvergleich ============================ */
@@ -202,11 +202,23 @@ function jsonp(path) {
   });
 }
 const cache = new Map();
-const dzOf = f => ({ preview: f.preview, cover: f.album && (f.album.cover_xl || f.album.cover_big), link: f.link, albumId: f.album && f.album.id, rank: f.rank || 0 });
-function lookup(song) {
-  if (song[3]) return Promise.resolve(song[3]);
-  const key = song[0] + "|" + song[1];
-  if (cache.has(key)) return cache.get(key);
+const dzOf = f => ({ id: f.id, t: Date.now(), preview: f.preview, cover: f.album && (f.album.cover_xl || f.album.cover_big), link: f.link, albumId: f.album && f.album.id, rank: f.rank || 0 });
+// Deezer-Vorschau-Links sind nur ca. 15 Minuten gültig: nie alte Links verwenden.
+const FRESH = 8 * 60 * 1000;
+async function freshById(dz) {
+  try { const t = await jsonp("track/" + dz.id); if (t && t.preview) return Object.assign({}, dz, dzOf(t), { cover: dz.cover || dzOf(t).cover }); } catch (e) {}
+  return null;
+}
+function lookup(song, force) {
+  const key = song[0] + "|" + song[1], c = cache.get(key);
+  if (!force && c && Date.now() - c.t < FRESH) return c.p;
+  let p;
+  if (song[3] && song[3].id) p = (song[3].t && Date.now() - song[3].t < FRESH && !force) ? Promise.resolve(song[3]) : freshById(song[3]).then(d => d || searchDz(song));
+  else p = searchDz(song);
+  cache.set(key, { t: Date.now(), p });
+  return p;
+}
+function searchDz(song) {
   const p = (async () => {
     const title = song[1].replace(/\(.*?\)/g, "").trim(), artist = song[0].replace(/^DJ\s+/i, "").replace(/-Cast$/i, "");
     for (const q of [`artist:"${artist}" track:"${title}"`, `${artist} ${title}`, title]) {
@@ -220,7 +232,6 @@ function lookup(song) {
     }
     return null;
   })();
-  cache.set(key, p);
   return p;
 }
 async function loadLiveCharts() {
@@ -550,16 +561,22 @@ const deck = {
   async load(url) {
     this.stop(); this.mode = "none"; this.buf = null; audio.removeAttribute("src");
     const my = ++loadToken;
+    if (unlockP) { await Promise.race([unlockP, new Promise(r => setTimeout(r, 600))]); unlockP = null; }
+    let dead = false;
     try {
       const g = getGraph(); if (!g) throw 0;
-      const r = await fetch(url, { mode: "cors" }); if (!r.ok) throw 0;
+      const r = await fetch(url, { mode: "cors" }); if (!r.ok) { dead = r.status >= 400; throw 0; }
       const b = await decodeBuf(g.c, await r.arrayBuffer());
       if (my !== loadToken) return false;
       this.buf = b; this.rbuf = reverseBuf(g.c, b); this.mode = "buf"; this.off = 0; WAVE = computeWave(b);
     } catch (e) {
       if (my !== loadToken) return false;
+      if (dead) return "fail"; // Link abgelaufen
       WAVE = fakeWave(url);
       this.mode = "el"; audio.src = url; try { audio.load(); } catch (e2) {}
+      const err = await new Promise(res => { const t = setTimeout(() => res(false), 1500); audio.addEventListener("error", () => { clearTimeout(t); res(true); }, { once: true }); });
+      if (my !== loadToken) return false;
+      if (err) return "fail";
     }
     applyMix(); renderMixer(); return true;
   },
@@ -810,8 +827,11 @@ async function loadSong() {
   if (R.choice) { P.mc = { title: mcOptions(it.song[1], 1, false), artist: mcOptions(it.song[0], 0, true), tPick: null, aPick: null, tStruck: [], aStruck: [] }; renderMC(); }
   if (dz.cover) $("#cover").style.backgroundImage = `url("${dz.cover}")`;
   $("#status").textContent = "Song wird geladen …";
-  const ok = await deck.load(dz.preview);
-  if (!ok || myP !== P) return;
+  let ok = await deck.load(dz.preview);
+  if (myP !== P) return;
+  if (ok === "fail") { const pr = await prepare(it.song, true); if (myP !== P) return; if (pr) { P.dz = pr.dz; it.song[3] = pr.dz; ok = await deck.load(pr.dz.preview); if (myP !== P) return; } }
+  if (ok === "fail") { const spare = R.pool.shift(); if (spare) R.items[R.idx] = { song: spare }; else R.items.splice(R.idx, 1); if (R.idx < R.items.length) return loadSong(); $("#status").textContent = "Keine abspielbaren Songs gefunden."; return; }
+  if (!ok) return;
   P.ready = true;
   if (!R.daily && !R.genre.live) { const k = "mq-seen-" + R.genre.id, l = store.get(k, []); l.push(it.song[0] + "|" + it.song[1]); store.set(k, l.slice(-400)); }
   renderTop(); setRing(0);
@@ -842,10 +862,11 @@ function setRing(t) {
   const st = $("#stage"); st.style.setProperty("--pos", clamp(t / lim, 0, 1)); $("#cdjTime").textContent = "-" + fmt(Math.max(0, lim - t));
 }
 // iPhone: Ton nur nach einem Tipp erlaubt -> beim Tipp auf Start/Weiter einmal stumm "anspielen"
+let unlockP = null;
 const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 function unlockAudio() {
   try { const c = ac(); getGraph(); if (c) { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } } catch (e) {}
-  if (!deck.playing && deck.mode !== "el") { try { audio.src = SILENT; const p = audio.play(); if (p && p.then) p.then(() => audio.pause()).catch(() => {}); } catch (e) {} }
+  if (!deck.playing && deck.mode !== "el") { try { audio.src = SILENT; const p = audio.play(); if (p && p.then) unlockP = p.then(() => { if (audio.src.startsWith(SILENT.slice(0, 40))) audio.pause(); }).catch(() => {}); } catch (e) {} }
 }
 document.addEventListener("click", e => { if (e.target.closest("#start,#next,#again,#daily,#handGo,#play,.genre")) unlockAudio(); }, true);
 function startPlay() {
