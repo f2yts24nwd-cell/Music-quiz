@@ -30,14 +30,14 @@ const SETTINGS = [
   { key: "name", label: "Dein Name", desc: "Steht in der Bestenliste.", type: "text" },
   { key: "listen", label: "Hördauer", desc: "Wie lange der Ausschnitt laufen darf.", opts: [[10, "10 s"], [20, "20 s"], [30, "30 s"]] },
   { key: "count", label: "Songs pro Runde", opts: [[5, "5"], [10, "10"], [15, "15"], [20, "20"]] },
-  { key: "cover", label: "Verschwommenes Cover", desc: "Taucht nach dieser Hörzeit als Bild auf der Platte auf.", opts: [[0, "Aus"], [10, "nach 10 s"], [20, "nach 20 s"]] },
+  { key: "cover", label: "Verschwommenes Cover", desc: "Taucht nach dieser Hörzeit im Jogwheel-Display auf.", opts: [[0, "Aus"], [10, "nach 10 s"], [20, "nach 20 s"]] },
   { key: "autoplay", label: "Automatisch abspielen", desc: "Der Song startet von selbst, sobald er geladen ist.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "hints", label: "Tipps", desc: "Tipps kosten je einen Punkt.", opts: [[true, "Erlaubt"], [false, "Aus"]] },
   { key: "answer", label: "Antworten", desc: "Eintippen oder aus Vorschlägen wählen – gilt für alle Modi, auch Party.", opts: [["type", "Eintippen"], ["choice", "Vorschläge"]] },
   { key: "strict", label: "Schreibweise", desc: "Wie genau Titel und Interpret stimmen müssen.", opts: [["locker", "Locker"], ["normal", "Normal"], ["streng", "Streng"]] },
   { key: "yearLevel", label: "Jahres-Auswahl", desc: "Wie nah die falschen Jahre am richtigen liegen.", opts: [["leicht", "Leicht"], ["normal", "Normal"], ["schwer", "Schwer"]] },
-  { key: "mixer", label: "Mischpult", desc: "Lautstärke, Tempo, Filter und Effekt-Pads unter dem Plattenspieler.", opts: [[true, "Anzeigen"], [false, "Ausblenden"]] },
-  { key: "scratch", label: "Scratch-Sound", desc: "Beim Drehen der Platte wie ein DJ scratchen.", opts: [[true, "An"], [false, "Aus"]] },
+  { key: "mixer", label: "Mischpult", desc: "Lautstärke, Tempo, Filter und Effekt-Pads unter dem CD-Player.", opts: [[true, "Anzeigen"], [false, "Ausblenden"]] },
+  { key: "scratch", label: "Scratch-Sound", desc: "Beim Drehen des Jogwheels wie ein DJ scratchen.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "sfx", label: "Soundeffekte", opts: [[true, "An"], [false, "Aus"]] },
 ];
 
@@ -777,6 +777,7 @@ function renderTop() {
   const pl = curPlayer();
   $("#score").textContent = R.mode === "party" ? pl.score : R.players[0].score;
   $("#playerChip").textContent = pl.name + " ist dran";
+  $("#cdjTrack").textContent = String(R.idx + 1).padStart(2, "0");
   $("#lives").textContent = "♥ Ein Leben";
   $("#streak").textContent = R.mode !== "party" && R.streak >= 2 ? `${R.streak}er-Serie${R.streak >= 3 ? " · +1 pro Song" : ""}` : "";
 }
@@ -816,9 +817,17 @@ async function loadSong() {
   renderTop(); setRing(0);
   [1, 2].forEach(d => { const nx = R.items[R.idx + d]; if (nx) prepare(nx.song); });
   if (S.autoplay && !(handoff && !$("#handoff").classList.contains("hide"))) startPlay();
-  else $("#status").textContent = "Tippe auf Start. Zum Spulen die Platte drehen.";
+  else $("#status").textContent = "Tippe auf Play. Zum Spulen das Jogwheel drehen.";
 }
 $("#handGo").onclick = () => { SFX.tap(); getGraph(); $("#handoff").classList.add("hide"); if (S.autoplay && P && P.ready && !playing) startPlay(); };
+
+/* ---------- CD-Player: Cue & Hot-Cues ---------- */
+$("#cue").onclick = () => { if (!P || !P.ready || P.spinning) return; getGraph(); SFX.tap(); stop(); deck.seek(0); setRing(0); };
+document.querySelector(".cdj-hot").onclick = e => {
+  const b = e.target.closest("[data-hot]"); if (!b || !P || !P.ready || P.spinning) return;
+  getGraph(); b.classList.remove("hit"); void b.offsetWidth; b.classList.add("hit"); setTimeout(() => b.classList.remove("hit"), 250);
+  const lim = P.done ? PREVIEW : limit(); deck.seek(lim * (+b.dataset.hot) / 4); setRing(deck.time()); if (!playing) startPlay();
+};
 
 /* ---------- Abspielen, Ring & Scrubbing ---------- */
 function setIcon(p) { $("#stage").classList.toggle("playing", p); setRing(P && P.ready ? deck.time() : 0);
@@ -830,18 +839,27 @@ function setRing(t) {
   $("#ringLim").style.width = lim / PREVIEW * 100 + "%";
   const arm = playing || dragging ? 30 + 14 * clamp(t / PREVIEW, 0, 1) : 0; $("#stage").style.setProperty("--arm", arm + "deg");
   $("#tNow").textContent = fmt(t); $("#tMax").textContent = fmt(lim);
+  const st = $("#stage"); st.style.setProperty("--pos", clamp(t / lim, 0, 1)); $("#cdjTime").textContent = "-" + fmt(Math.max(0, lim - t));
 }
+// iPhone: Ton nur nach einem Tipp erlaubt -> beim Tipp auf Start/Weiter einmal stumm "anspielen"
+const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+function unlockAudio() {
+  try { const c = ac(); getGraph(); if (c) { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } } catch (e) {}
+  if (!deck.playing && deck.mode !== "el") { try { audio.src = SILENT; const p = audio.play(); if (p && p.then) p.then(() => audio.pause()).catch(() => {}); } catch (e) {} }
+}
+document.addEventListener("click", e => { if (e.target.closest("#start,#next,#again,#daily,#handGo,#play,.genre")) unlockAudio(); }, true);
 function startPlay() {
   if (!P || !P.ready) { $("#status").textContent = "Der Song lädt noch …"; return; }
   if (deck.time() >= limit() - .05 && !P.done) deck.seek(0);
   playing = true; setIcon(true); lastTs = performance.now();
-  if (R.mode === "blitz" && !P.blitzStart && !P.done) P.blitzStart = performance.now();
   $("#status").textContent = "";
-  deck.play().then(() => { if (deck.mode === "el" && P.seek && Math.abs(audio.currentTime - P.seek) > .3) audio.currentTime = P.seek; P.seek = 0; })
-    .catch(() => { stop(); $("#status").textContent = "Tippe auf Play, um zu starten."; });
+  deck.play().then(() => {
+    if (R.mode === "blitz" && !P.blitzStart && !P.done) P.blitzStart = performance.now(); // Countdown erst, wenn Musik wirklich läuft
+    if (deck.mode === "el" && P.seek && Math.abs(audio.currentTime - P.seek) > .3) audio.currentTime = P.seek; P.seek = 0; })
+    .catch(() => { stop(); $("#status").textContent = "Tippe auf Play, um zu starten."; $("#play").classList.add("nudge"); });
 }
-$("#play").onclick = () => { getGraph(); if (playing) stop(); else startPlay(); };
-audio.addEventListener("ended", stop);
+$("#play").onclick = () => { getGraph(); $("#play").classList.remove("nudge"); if (playing) stop(); else startPlay(); };
+audio.addEventListener("ended", () => { if (deck.mode === "el" && !audio.src.startsWith("data:audio/wav;base64,UklGRiQAAAB")) stop(); });
 
 const stage = $("#stage"); let aPrev = 0, want = 0, tickAcc = 0, moveT = 0, wasPlaying = false;
 const angleAt = e => { const r = $("#disc").getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI; };
@@ -879,7 +897,7 @@ stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercan
     if (dragging) scratchIdle();
     else if (playing && !P.spinning) {
       const r = rateNow();
-      P.played += dt * Math.min(1, r); P.rot += dt * 200 * r; // 33⅓ U/min
+      P.played += dt * Math.min(1, r); P.rot += dt * 90 * r;
       if (deck.mode === "el" && deck.brake) audio.playbackRate = Math.max(.1, r);
       const t = deck.time();
       if (!P.done && t >= limit()) { stop(); deck.seek(limit()); if (R.mode === "intro" && P.stage < INTRO_STAGES.length - 1) $("#status").textContent = "Noch keine Ahnung? Hör etwas länger."; }
@@ -888,6 +906,7 @@ stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercan
     $("#disc").style.transform = `rotate(${P.rot}deg)`;
     stage.classList.toggle("playing", playing);
     stage.style.setProperty("--pitch", .5 - MIX.tempo / 32);
+    $("#cdjBpm").textContent = (MIX.tempo >= 0 ? "+" : "−") + Math.abs(MIX.tempo).toFixed(1) + "%";
     if (R.cover && !P.coverShown && !P.done && P.played >= R.cover && P.dz && P.dz.cover) showCover(false);
     if (R.mode === "blitz" && P.blitzStart && !P.done) {
       const left = BLITZ_SEC - (now - P.blitzStart) / 1000;
@@ -1098,7 +1117,7 @@ const HINTS = [
   { id: "year", name: "Jahr eingrenzen", desc: "Zwei falsche Bereiche fliegen raus", ok: s => [0, 1, 2, 3].filter(i => !slotOk(P.refs, i, s[2]) && i !== P.slot).length >= 2,
     run: s => { P.struck = shuffle([0, 1, 2, 3].filter(i => !slotOk(P.refs, i, s[2]) && i !== P.slot)).slice(0, 2); renderYears(); return { k: "Jahr", v: "Zwei falsche Bereiche sind gestrichen" }; } },
   { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverShown,
-    run: () => { showCover(true); return { k: "Cover", v: "Schau auf die Platte" }; } },
+    run: () => { showCover(true); return { k: "Cover", v: "Schau auf das Jogwheel" }; } },
 ];
 $("#hintBtn").onclick = () => {
   if (!P || !P.dz) return; SFX.tap();
@@ -1164,7 +1183,7 @@ function submit(timeout) {
   const c = $("#cover"); c.style.filter = "none"; if (P.dz.cover) $("#coverWrap").classList.add("on");
   const dzl = $("#dz"); if (P.dz.link) { dzl.href = P.dz.link; dzl.classList.remove("hide"); } else dzl.classList.add("hide");
   $("#guess").classList.add("hide"); $("#reveal").classList.remove("hide");
-  $("#status").textContent = "Dreh die Platte, um weiterzuhören."; setRing(deck.time());
+  $("#status").textContent = "Dreh das Jogwheel, um weiterzuhören."; setRing(deck.time());
   $("#more").classList.add("hide");
   const last = R.over || R.idx + 1 >= R.items.length;
   $("#next").textContent = R.over ? "Game over – zum Ergebnis" : last ? "Zum Ergebnis" : R.mode === "party" ? `Weiter: ${R.players[(R.idx + 1) % R.players.length].name}` : "Nächster Song";

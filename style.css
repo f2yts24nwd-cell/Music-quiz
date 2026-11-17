@@ -575,3 +575,73 @@ html[data-theme=glass] .pads{background:#ffffff12;box-shadow:inset 0 0 0 1px #ff
 html[data-theme=glass] .pad{border-radius:14px;background:radial-gradient(120% 90% at 50% 100%,color-mix(in srgb,var(--pc) 45%,transparent),transparent 70%),#ffffff1c;
   box-shadow:inset 0 1px 0 #ffffff60,inset 0 0 0 1px color-mix(in srgb,var(--pc) 60%,#ffffff40),0 6px 16px -6px color-mix(in srgb,var(--pc) 60%,transparent)}
 html[data-theme=glass] input::placeholder{color:#ffffffb0}
+
+/* =====================================================================
+   DJ-CD-PLAYER (moderner Club-Standard)
+   ===================================================================== */
+.cdj{position:relative;width:100%;max-width:27rem;margin:.7rem auto .2rem;padding:.6rem .7rem .75rem;border-radius:16px;touch-action:none;-webkit-user-select:none;user-select:none;
+  background:linear-gradient(180deg,#232429 0%,#141518 40%,#0e0f11 100%);
+  box-shadow:0 1.6rem 3rem -1.2rem #000,0 0 0 1px #000,inset 0 1px 0 #ffffff26,inset 0 -2px 0 #0009}
+.cdj-screen{border-radius:8px;padding:.45rem .6rem .5rem;background:linear-gradient(180deg,#0b1a26,#060d14);box-shadow:inset 0 0 0 1px #1f3446,inset 0 4px 10px #000}
+.cdj-info{display:flex;justify-content:space-between;align-items:baseline;font-family:Unbounded,sans-serif;font-size:.58rem;letter-spacing:.06em;color:#8fb8d6;margin-bottom:.4rem}
+.cdj-trk b{color:#fff;font-size:.8rem;margin-left:.2rem}
+.cdj-rem{color:#fff;font-size:.95rem;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.cdj-tempo{color:#2bff88;font-variant-numeric:tabular-nums}
+.cdj .tt-bar{max-width:none;margin:0;height:6px;border-radius:3px;background:#ffffff14}
+.cdj .tt-lim{background:#2e6fa833}
+.cdj .tt-fill{background:linear-gradient(90deg,#2ee6ff,#7aa8ff);box-shadow:0 0 6px #2ee6ff}
+.cdj-hot{display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;margin:.55rem 0 .2rem}
+.cdj-hot button{border:0;border-radius:5px;padding:.38rem 0;font-family:Unbounded,sans-serif;font-weight:700;font-size:.6rem;color:#d9dbe2;cursor:pointer;
+  background:linear-gradient(180deg,#2c2e34,#1b1c20);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--hc) 55%,#000),inset 0 -2px 0 color-mix(in srgb,var(--hc) 70%,transparent),0 2px 0 #000}
+.cdj-hot button:active,.cdj-hot button.hit{background:var(--hc);color:#0b0b0e;box-shadow:0 0 14px var(--hc)}
+.cdj-main{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.5rem}
+.cdj-left{display:flex;flex-direction:column;gap:.7rem;align-self:end;padding-bottom:.3rem}
+.cdj-cue,.cdj-play{width:3.3rem;height:3.3rem;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center;position:relative;
+  background:radial-gradient(circle at 50% 35%,#34363c,#1a1b1f 70%);box-shadow:0 3px 0 #000,0 4px 8px #0008,inset 0 1px 0 #ffffff22}
+.cdj-cue::before,.cdj-play::before{content:"";position:absolute;inset:-4px;border-radius:50%;border:2.5px solid var(--lc);opacity:.35;transition:all .2s}
+.cdj-cue{--lc:#ff9a1f}.cdj-play{--lc:#2bff88}
+.cdj-cue span{font-family:Unbounded,sans-serif;font-weight:900;font-size:.6rem;letter-spacing:.08em;color:#ffb35c}
+.cdj-play svg{width:1.3rem;height:1.3rem;fill:#c9ffe0}
+.cdj.playing .cdj-play::before{opacity:1;box-shadow:0 0 12px #2bff88,inset 0 0 6px #2bff8899}
+.cdj:not(.playing) .cdj-cue::before{opacity:1;animation:cueblink 1s steps(1) infinite}
+@keyframes cueblink{50%{opacity:.25}}
+.cdj-play.nudge::before{opacity:1;animation:cueblink .6s steps(1) infinite}
+.cdj-cue:active,.cdj-play:active{transform:translateY(2px);box-shadow:0 1px 0 #000,inset 0 1px 0 #ffffff22}
+/* Jogwheel */
+.cdj-jog{position:relative;width:100%;max-width:15.5rem;aspect-ratio:1;justify-self:center}
+.cdj-ring{position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle,transparent 0 70%,#00000080 70.5%,transparent 72%),
+    repeating-conic-gradient(#9da0a8 0 1.2deg,#e6e8ec 1.2deg 2.4deg),
+    radial-gradient(circle,#c9ccd3,#7d8089);
+  box-shadow:0 .6rem 1.2rem #000c,inset 0 0 0 1px #00000080,0 0 0 2px #050506}
+.cdj-plate{position:absolute;inset:7%;border-radius:50%;cursor:grab;will-change:transform;
+  background:radial-gradient(circle at 50% 30%,#3a3c43 0%,#1c1d22 55%,#0e0f12 100%);
+  box-shadow:inset 0 2px 3px #ffffff26,inset 0 -3px 6px #000,0 0 0 1px #000}
+.cdj-plate::before{content:"";position:absolute;inset:5%;border-radius:50%;
+  background:radial-gradient(circle,transparent 0 46%,#0000 46%),repeating-conic-gradient(#ffffff0d 0 3deg,transparent 3deg 9deg);
+  -webkit-mask:radial-gradient(circle,transparent 0 47%,#000 48% 100%);mask:radial-gradient(circle,transparent 0 47%,#000 48% 100%)}
+.cdj-mark{position:absolute;left:50%;top:4%;width:4px;height:13%;margin-left:-2px;border-radius:2px;background:#fff;box-shadow:0 0 6px #fff}
+.cdj.drag .cdj-plate{cursor:grabbing}
+.cdj-center{position:absolute;inset:31%;border-radius:50%;overflow:hidden;pointer-events:none;
+  background:radial-gradient(circle,#0b1a26,#04080c);box-shadow:0 0 0 3px #08090b,0 0 0 4px #2a2c33,inset 0 0 12px #000}
+.cdj-arc{position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(#2ee6ff calc(var(--pos,0) * 1turn),#ffffff14 0);
+  -webkit-mask:radial-gradient(circle,transparent 0 78%,#000 80%);mask:radial-gradient(circle,transparent 0 78%,#000 80%)}
+.cdj-dot{position:absolute;left:50%;top:50%;width:.55rem;height:.55rem;margin:-.275rem;border-radius:50%;background:#fff;box-shadow:0 0 8px #fff;
+  transform:rotate(calc(var(--pos,0) * 1turn)) translateY(-1.9rem)}
+.cdj-center .cover{position:absolute;inset:12%;border-radius:50%;overflow:hidden;clip-path:circle(50%);opacity:0;transition:opacity .8s}
+.cdj-center .cover i{position:absolute;inset:-6%;background-size:cover;background-position:center;transition:filter 1.2s var(--ease)}
+.cdj-center .cover.on{opacity:1}
+.cdj-right{align-self:stretch;display:flex;align-items:center}
+.cdj .tt-pitch{position:relative;right:auto;bottom:auto;width:2.2rem;height:85%;pointer-events:none}
+.cdj .tt-pitch span{color:#8d9099}
+/* Glass-Design: CD-Player mit Glasfront */
+html[data-theme=glass] .cdj{background:linear-gradient(160deg,#ffffff2e,#ffffff0d);-webkit-backdrop-filter:blur(26px) saturate(180%);backdrop-filter:blur(26px) saturate(180%);
+  box-shadow:inset 0 1px 0 #ffffff80,inset 0 0 0 1px #ffffff40,0 1.6rem 3rem -1.2rem #0008;border-radius:24px}
+html[data-theme=glass] .cdj-screen{background:#06101acc;border-radius:14px}
+html[data-theme=glass] .cdj-hot button{background:#ffffff1f;color:#fff;border-radius:999px;box-shadow:inset 0 1px 0 #ffffff50,inset 0 0 0 1px color-mix(in srgb,var(--hc) 70%,#fff)}
+html[data-theme=glass] .cdj-cue,html[data-theme=glass] .cdj-play{background:#ffffff26;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 #ffffff70,0 4px 10px #0004}
+html[data-theme=glass] .cdj .tt-pitch span{color:#fff}
+.cdj-jog{max-width:13.4rem}
+.cdj ~ .time{display:none}
+.cdj ~ .status{margin-top:.5rem}
