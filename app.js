@@ -20,7 +20,7 @@ const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacI
 if (isIPad) document.documentElement.classList.add("ipad");
 
 /* ============================ Einstellungen ============================ */
-const DEFAULTS = { name: "", listen: 30, count: 10, cover: 20, hints: true, strict: "locker", yearLevel: "normal", sfx: true };
+const DEFAULTS = { name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
 const S = Object.assign({}, DEFAULTS, store.get("mq-settings", {}));
 const saveSettings = () => store.set("mq-settings", S);
 
@@ -29,9 +29,12 @@ const SETTINGS = [
   { key: "listen", label: "Hördauer", desc: "Wie lange der Ausschnitt laufen darf.", opts: [[10, "10 s"], [20, "20 s"], [30, "30 s"]] },
   { key: "count", label: "Songs pro Runde", opts: [[5, "5"], [10, "10"], [15, "15"], [20, "20"]] },
   { key: "cover", label: "Verschwommenes Cover", desc: "Taucht nach dieser Hörzeit als Hilfe auf der CD auf.", opts: [[0, "Aus"], [10, "nach 10 s"], [20, "nach 20 s"]] },
+  { key: "autoplay", label: "Automatisch abspielen", desc: "Der Song startet von selbst, sobald er geladen ist.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "hints", label: "Tipps", desc: "Tipps kosten je einen Punkt.", opts: [[true, "Erlaubt"], [false, "Aus"]] },
   { key: "strict", label: "Schreibweise", desc: "Wie genau Titel und Interpret stimmen müssen.", opts: [["locker", "Locker"], ["normal", "Normal"], ["streng", "Streng"]] },
   { key: "yearLevel", label: "Jahres-Auswahl", desc: "Wie nah die falschen Jahre am richtigen liegen.", opts: [["leicht", "Leicht"], ["normal", "Normal"], ["schwer", "Schwer"]] },
+  { key: "mixer", label: "Mischpult", desc: "Lautstärke, Tempo, Filter und Effekt-Pads unter der CD.", opts: [[true, "Anzeigen"], [false, "Ausblenden"]] },
+  { key: "scratch", label: "Scratch-Sound", desc: "Beim Drehen der CD wie ein DJ scratchen.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "sfx", label: "Soundeffekte", opts: [[true, "An"], [false, "Aus"]] },
 ];
 
@@ -295,11 +298,179 @@ function startDaily() {
   startRound({ genre: { id: "daily", name: "Tages-Challenge", colors: ["#b9a4ff", "#ffb38a"] }, songs, mode: "classic", daily: true, practice: done, keepOrder: true });
 }
 
-/* ============================ Runde ============================ */
+/* ============================ Deck: Wiedergabe, Scratch & Mischpult ============================ */
+// Bevorzugt Web Audio (Song wird dekodiert -> echtes Scratchen, Filter, Tempo).
+// Falls der Song nicht dekodiert werden kann, spielt ein <audio>-Element (Scratch dann als Vinyl-Rauschen).
 const audio = new Audio(); audio.preload = "auto"; audio.setAttribute("playsinline", "");
+audio.preservesPitch = false; audio.webkitPreservesPitch = false;
+try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {} // iPhone: auch im Lautlos-Modus hörbar
+const MIX = Object.assign({ vol: 90, tempo: 0, filter: 0 }, store.get("mq-mix", {}));
+let graph = null, loadToken = 0;
+function getGraph() {
+  const c = ac(); if (!c) return null; if (graph) return graph;
+  const filt = c.createBiquadFilter(), vol = c.createGain();
+  filt.connect(vol).connect(c.destination);
+  graph = { c, filt, vol }; applyMix(); return graph;
+}
+function applyMix() {
+  const r = 1 + MIX.tempo / 100;
+  audio.volume = MIX.vol / 100; audio.playbackRate = r;
+  if (graph) {
+    const t = graph.c.currentTime, f = MIX.filter / 100, F = graph.filt;
+    graph.vol.gain.setTargetAtTime(MIX.vol / 100, t, .02);
+    if (Math.abs(f) < .05) { F.type = "lowpass"; F.frequency.setTargetAtTime(22000, t, .03); F.Q.value = .7; }
+    else if (f < 0) { F.type = "lowpass"; F.frequency.setTargetAtTime(18000 * Math.pow(250 / 18000, -f), t, .03); F.Q.value = 6; }
+    else { F.type = "highpass"; F.frequency.setTargetAtTime(30 * Math.pow(5000 / 30, f), t, .03); F.Q.value = 6; }
+  }
+  deck.setRate();
+}
+const decodeBuf = (c, ab) => new Promise((res, rej) => { const p = c.decodeAudioData(ab, res, rej); if (p && p.then) p.then(res, rej); });
+function reverseBuf(c, b) {
+  const r = c.createBuffer(b.numberOfChannels, b.length, b.sampleRate);
+  for (let ch = 0; ch < b.numberOfChannels; ch++) { const s = b.getChannelData(ch), d = r.getChannelData(ch); for (let i = 0, n = s.length; i < n; i++) d[i] = s[n - 1 - i]; }
+  return r;
+}
+const deck = {
+  mode: "none", buf: null, rbuf: null, src: null, t0: 0, off: 0, playing: false, rate: 1, brake: null,
+  dur() { return this.mode === "buf" ? this.buf.duration : (isFinite(audio.duration) ? audio.duration : PREVIEW); },
+  time() {
+    if (this.mode === "el") return audio.currentTime;
+    if (!this.playing || !graph) return this.off;
+    const e = graph.c.currentTime - this.t0;
+    if (this.brake) { const k = Math.min(e, BRAKE); return this.off + this.rate * (k - k * k / (2 * BRAKE)); }
+    return Math.min(this.dur(), this.off + e * this.rate);
+  },
+  async load(url) {
+    this.stop(); this.mode = "none"; this.buf = null; audio.removeAttribute("src");
+    const my = ++loadToken;
+    try {
+      const g = getGraph(); if (!g) throw 0;
+      const r = await fetch(url, { mode: "cors" }); if (!r.ok) throw 0;
+      const b = await decodeBuf(g.c, await r.arrayBuffer());
+      if (my !== loadToken) return false;
+      this.buf = b; this.rbuf = reverseBuf(g.c, b); this.mode = "buf"; this.off = 0;
+    } catch (e) {
+      if (my !== loadToken) return false;
+      this.mode = "el"; audio.src = url; try { audio.load(); } catch (e2) {}
+    }
+    applyMix(); return true;
+  },
+  play() {
+    this.brake = null;
+    if (this.mode === "buf") {
+      const g = getGraph(); this._kill();
+      const s = g.c.createBufferSource(); s.buffer = this.buf; this.rate = 1 + MIX.tempo / 100; s.playbackRate.value = this.rate;
+      s.connect(g.filt); s.start(0, clamp(this.off, 0, this.dur() - .01)); this.t0 = g.c.currentTime; this.src = s; this.playing = true;
+      s.onended = () => { if (this.src === s) { this.off = this.time(); this.playing = false; this.src = null; stop(); } };
+      return Promise.resolve();
+    }
+    if (this.mode === "el") { audio.playbackRate = 1 + MIX.tempo / 100; this.playing = true; return audio.play() || Promise.resolve(); }
+    return Promise.reject(new Error("kein Song"));
+  },
+  pause() {
+    if (this.mode === "buf") { if (this.playing) this.off = this.time(); this._kill(); }
+    else if (this.mode === "el") audio.pause();
+    this.playing = false; this.brake = null;
+  },
+  _kill() { if (this.src) { const s = this.src; this.src = null; s.onended = null; try { s.stop(); } catch (e) {} s.disconnect(); } },
+  seek(t) {
+    t = clamp(t, 0, Math.max(0, this.dur() - .01));
+    if (this.mode === "el") { if (audio.readyState >= 1) audio.currentTime = t; else if (P) P.seek = t; return; }
+    const was = this.playing; this.pause(); this.off = t; if (was) this.play();
+  },
+  setRate() {
+    const r = 1 + MIX.tempo / 100;
+    if (this.mode === "buf" && this.playing && this.src && !this.brake) { this.off = this.time(); this.t0 = graph.c.currentTime; this.rate = r; this.src.playbackRate.setValueAtTime(r, graph.c.currentTime); }
+    else if (!this.brake) this.rate = r;
+  },
+  stop() { this.pause(); this.off = 0; },
+};
+const BRAKE = 1.1;
+function rateNow() { if (!deck.playing) return 0; if (deck.brake) return Math.max(0, deck.rate * (1 - (performance.now() - deck.brake) / 1000 / BRAKE)); return deck.rate; }
+
+/* ---------- Scratch ---------- */
+const scr = { src: null, g: null, dir: 0, last: 0, noise: null, nf: null, ng: null };
+function noiseInit() {
+  const c = getGraph() && graph.c; if (!c || scr.noise) return;
+  const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < .02 ? 1 : .35);
+  const s = c.createBufferSource(); s.buffer = b; s.loop = true;
+  scr.nf = c.createBiquadFilter(); scr.nf.type = "bandpass"; scr.nf.Q.value = 3;
+  scr.ng = c.createGain(); scr.ng.gain.value = 0;
+  s.connect(scr.nf).connect(scr.ng).connect(graph.vol); s.start(); scr.noise = s;
+}
+function scratchStart() {
+  if (!S.scratch) return; const g = getGraph(); if (!g) return;
+  if (deck.mode === "buf") { scr.g = g.c.createGain(); scr.g.gain.value = 0; scr.g.connect(g.filt); scr.dir = 0; }
+  noiseInit();
+}
+function scratchMove(t, v) {
+  if (!S.scratch || !graph) return;
+  const c = graph.c, now = c.currentTime, sp = Math.min(4, Math.abs(v));
+  scr.last = performance.now();
+  if (scr.ng) { scr.ng.gain.setTargetAtTime(deck.mode === "buf" ? Math.min(.05, sp * .02) : Math.min(.35, sp * .14), now, .015); scr.nf.frequency.setTargetAtTime(300 + sp * 900, now, .02); }
+  if (deck.mode !== "buf" || !scr.g) return;
+  const dir = v >= 0 ? 1 : -1;
+  if (dir !== scr.dir || !scr.src) {
+    if (scr.src) { const o = scr.src; try { o.stop(now + .01); } catch (e) {} }
+    const s = c.createBufferSource(); s.buffer = dir > 0 ? deck.buf : deck.rbuf; s.connect(scr.g);
+    s.playbackRate.value = Math.max(.02, sp);
+    s.start(0, clamp(dir > 0 ? t : deck.dur() - t, 0, deck.dur() - .01)); scr.src = s; scr.dir = dir;
+  } else scr.src.playbackRate.setTargetAtTime(Math.max(.02, sp), now, .012);
+  scr.g.gain.setTargetAtTime(sp < .04 ? 0 : Math.min(1, .35 + sp * .4), now, .01);
+}
+function scratchIdle() { // Finger steht still -> leise
+  if (!graph || performance.now() - scr.last < 60) return;
+  const now = graph.c.currentTime;
+  if (scr.g) scr.g.gain.setTargetAtTime(0, now, .015);
+  if (scr.src) scr.src.playbackRate.setTargetAtTime(.02, now, .02);
+  if (scr.ng) scr.ng.gain.setTargetAtTime(0, now, .02);
+}
+function scratchEnd() {
+  if (!graph) return; const now = graph.c.currentTime;
+  if (scr.g) { scr.g.gain.setTargetAtTime(0, now, .01); const s = scr.src, g = scr.g; setTimeout(() => { try { s && s.stop(); } catch (e) {} g.disconnect(); }, 120); }
+  if (scr.ng) scr.ng.gain.setTargetAtTime(0, now, .02);
+  scr.src = null; scr.g = null; scr.dir = 0;
+}
+
+/* ---------- Effekte am Mischpult ---------- */
+function airHorn() {
+  const c = getGraph() && graph.c; if (!c) return;
+  [0, .28, .56].forEach((d, k) => {
+    const t = c.currentTime + d, len = k === 2 ? .55 : .22, g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.16, t + .02); g.gain.setValueAtTime(.16, t + len - .05); g.gain.linearRampToValueAtTime(0, t + len);
+    const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2600; f.connect(g).connect(graph.vol);
+    [440, 554, 659, 880].forEach(fr => { const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.setValueAtTime(fr * .94, t); o.frequency.exponentialRampToValueAtTime(fr, t + .06); o.connect(f); o.start(t); o.stop(t + len + .02); });
+  });
+}
+function rewind() {
+  if (!P || !P.dz || deck.mode === "none") return;
+  const t = deck.time(), was = true; if (t < .3) { deck.seek(0); return; }
+  deck.pause(); scratchStart();
+  const dur = Math.min(.9, .25 + t * .05), v = -t / dur, t0 = performance.now(), r0 = P.rot;
+  P.spinning = true;
+  (function f(now) {
+    const k = Math.min(1, (now - t0) / 1000 / dur), pos = t * (1 - k);
+    P.rot = r0 - t * DPS * k; setRing(pos);
+    if (k < 1) { scratchMove(pos, v); requestAnimationFrame(f); }
+    else { scratchEnd(); P.spinning = false; deck.seek(0); if (was) startPlay(); }
+  })(t0);
+}
+function brake() {
+  if (!deck.playing) return;
+  if (deck.mode === "buf" && deck.src) {
+    deck.off = deck.time(); deck.t0 = graph.c.currentTime;
+    const p = deck.src.playbackRate; p.cancelScheduledValues(deck.t0); p.setValueAtTime(deck.rate, deck.t0); p.linearRampToValueAtTime(.001, deck.t0 + BRAKE);
+  }
+  deck.brake = performance.now();
+  setTimeout(() => { if (deck.brake) { const off = deck.time(); deck.pause(); deck.off = off; if (deck.mode === "el") audio.playbackRate = 1 + MIX.tempo / 100; stop(); } }, BRAKE * 1000);
+}
+
+/* ============================ Runde ============================ */
 let R = null, P = null, playing = false, dragging = false, lastTs = 0;
 
 function startRound(o) {
+  getGraph();
   const pool = o.keepOrder ? o.songs.slice() : shuffle(o.songs.slice());
   const n = o.daily ? 5 : o.mode === "sudden" ? pool.length : Math.min(S.count, pool.length);
   const pl = o.mode === "party" ? players.map((p, i) => ({ name: p.trim() || "Spieler " + (i + 1), score: 0 })) : [{ name: S.name.trim() || "Du", score: 0 }];
@@ -312,6 +483,8 @@ function startRound(o) {
   $("#lives").classList.toggle("hide", R.mode !== "sudden");
   $("#blitzBar").classList.toggle("hide", R.mode !== "blitz");
   $("#hintBtn").classList.toggle("hide", !R.hints);
+  $("#mixer").classList.toggle("hide", !S.mixer);
+  renderMixer();
   show("game");
   loadSong();
 }
@@ -329,17 +502,18 @@ function renderTop() {
 }
 
 async function loadSong() {
-  stop(); audio.removeAttribute("src"); try { audio.load(); } catch (e) {}
-  P = { yearOpts: [], yearPick: null, struck: [], hints: [], played: 0, coverShown: false, stage: 0, blitzStart: null, seek: 0, rot: 0, dz: null, done: false };
+  stop(); deck.stop(); loadToken++;
+  P = { yearOpts: [], yearPick: null, struck: [], hints: [], played: 0, coverShown: false, stage: 0, blitzStart: null, seek: 0, rot: 0, dz: null, done: false, ready: false };
   $("#coverWrap").className = "cover"; $("#cover").style.backgroundImage = ""; $("#cover").style.filter = "";
   $("#guess").classList.remove("hide"); $("#reveal").classList.add("hide");
   $("#gTitle").value = ""; $("#gArtist").value = ""; $("#usedHints").innerHTML = ""; $("#years").innerHTML = "";
   $("#hintBtn").disabled = false;
-  $("#more").classList.toggle("hide", R.mode !== "intro");
+  $("#more").classList.toggle("hide", R.mode !== "intro"); $("#more").disabled = false; $("#more").innerHTML = `Länger hören <em>−1</em>`;
   $("#blitzFill").style.transform = "scaleX(1)";
   setRing(0);
   renderTop();
-  if (R.mode === "party" && R.players.length > 1) { $("#handName").textContent = curPlayer().name; $("#handoff").classList.remove("hide"); }
+  const handoff = R.mode === "party" && R.players.length > 1;
+  if (handoff) { $("#handName").textContent = curPlayer().name; $("#handoff").classList.remove("hide"); }
   $("#status").textContent = "Song wird gesucht …";
   let dz = null;
   while (!dz && R.idx < R.items.length) {
@@ -347,67 +521,83 @@ async function loadSong() {
     if (!dz) { const spare = R.pool.shift(); if (spare) R.items[R.idx] = { song: spare }; else R.items.splice(R.idx, 1); }
   }
   if (!dz) { $("#status").textContent = "Deezer ist gerade nicht erreichbar. Prüfe die Internetverbindung und starte die Runde neu."; return; }
-  const it = R.items[R.idx]; P.dz = dz;
+  const it = R.items[R.idx], myP = P; P.dz = dz;
   if (!it.song[2]) { const y = dz.albumId && await yearOfAlbum(dz.albumId); it.song = [it.song[0], it.song[1], [y || THIS_YEAR], dz]; }
   P.yearOpts = makeYears(it.song[2]); renderYears();
   if (dz.cover) $("#cover").style.backgroundImage = `url("${dz.cover}")`;
-  audio.src = dz.preview;
-  $("#status").textContent = "Tippe auf Play. Zum Spulen die CD drehen.";
+  $("#status").textContent = "Song wird geladen …";
+  const ok = await deck.load(dz.preview);
+  if (!ok || myP !== P) return;
+  P.ready = true;
   renderTop(); setRing(0);
   const nx = R.items[R.idx + 1]; if (nx) lookup(nx.song);
+  if (S.autoplay && !(handoff && !$("#handoff").classList.contains("hide"))) startPlay();
+  else $("#status").textContent = "Tippe auf Play. Zum Spulen die CD drehen.";
 }
-$("#handGo").onclick = () => { SFX.tap(); $("#handoff").classList.add("hide"); };
+$("#handGo").onclick = () => { SFX.tap(); getGraph(); $("#handoff").classList.add("hide"); if (S.autoplay && P && P.ready && !playing) startPlay(); };
 
 /* ---------- Abspielen, Ring & Scrubbing ---------- */
 function setIcon(p) { $("#ico").innerHTML = p ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>'; }
-function stop() { audio.pause(); playing = false; setIcon(false); }
+function stop() { deck.pause(); playing = false; setIcon(false); }
 function setRing(t) {
   $("#ring").style.strokeDashoffset = RING * (1 - clamp(t, 0, PREVIEW) / PREVIEW);
   const lim = P && !P.done ? limit() : PREVIEW;
   $("#ringLim").style.strokeDashoffset = RING * (1 - lim / PREVIEW);
   $("#tNow").textContent = fmt(t); $("#tMax").textContent = fmt(lim);
 }
-$("#play").onclick = () => {
-  if (!P || P.done && !audio.src) return;
-  if (playing) { stop(); return; }
-  if (!audio.src) { $("#status").textContent = "Der Song lädt noch …"; return; }
-  if (audio.currentTime >= limit() - .05 && !P.done) audio.currentTime = 0;
-  const pr = audio.play();
+function startPlay() {
+  if (!P || !P.ready) { $("#status").textContent = "Der Song lädt noch …"; return; }
+  if (deck.time() >= limit() - .05 && !P.done) deck.seek(0);
   playing = true; setIcon(true); lastTs = performance.now();
   if (R.mode === "blitz" && !P.blitzStart && !P.done) P.blitzStart = performance.now();
   $("#status").textContent = "";
-  if (pr && pr.then) pr.then(() => { if (P.seek && Math.abs(audio.currentTime - P.seek) > .3) audio.currentTime = P.seek; P.seek = 0; })
-    .catch(() => { stop(); $("#status").textContent = "Abspielen blockiert. Tippe noch einmal auf Play."; });
-};
+  deck.play().then(() => { if (deck.mode === "el" && P.seek && Math.abs(audio.currentTime - P.seek) > .3) audio.currentTime = P.seek; P.seek = 0; })
+    .catch(() => { stop(); $("#status").textContent = "Tippe auf Play, um zu starten."; });
+}
+$("#play").onclick = () => { getGraph(); if (playing) stop(); else startPlay(); };
 audio.addEventListener("ended", stop);
 
-const stage = $("#stage"); let aPrev = 0, want = 0, tickAcc = 0;
+const stage = $("#stage"); let aPrev = 0, want = 0, tickAcc = 0, moveT = 0, wasPlaying = false;
 const angleAt = e => { const r = stage.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI; };
 stage.addEventListener("pointerdown", e => {
-  if (e.target.closest("#play") || !P || !P.dz) return;
+  if (e.target.closest("#play") || !P || !P.ready || P.spinning) return;
+  getGraph();
   dragging = true; stage.classList.add("drag"); stage.setPointerCapture(e.pointerId);
-  aPrev = angleAt(e); want = audio.currentTime || P.seek || 0; tickAcc = 0;
+  wasPlaying = playing; want = deck.time(); deck.pause();
+  aPrev = angleAt(e); tickAcc = 0; moveT = performance.now();
+  scratchStart();
 });
 stage.addEventListener("pointermove", e => {
   if (!dragging) return;
-  const a = angleAt(e); let d = a - aPrev; if (d > 180) d -= 360; if (d < -180) d += 360; aPrev = a;
-  const lim = P.done ? PREVIEW : limit();
+  const now = performance.now(), a = angleAt(e); let d = a - aPrev; if (d > 180) d -= 360; if (d < -180) d += 360; aPrev = a;
+  const lim = P.done ? PREVIEW : limit(), before = want;
   want = clamp(want + d / DPS, 0, lim - .05);
+  const dtR = Math.max(.008, (now - moveT) / 1000); moveT = now;
+  scratchMove(want, (want - before) / dtR);
   P.rot += d;
-  tickAcc += Math.abs(d); if (tickAcc > 24) { tickAcc = 0; SFX.tick(); }
-  if (audio.readyState >= 1) audio.currentTime = want; else P.seek = want;
+  if (!S.scratch) { tickAcc += Math.abs(d); if (tickAcc > 24) { tickAcc = 0; SFX.tick(); } }
+  if (deck.mode === "el") { if (audio.readyState >= 1) audio.currentTime = want; else P.seek = want; }
   setRing(want);
 });
-const endDrag = () => { if (!dragging) return; dragging = false; stage.classList.remove("drag"); };
+const endDrag = () => {
+  if (!dragging) return; dragging = false; stage.classList.remove("drag");
+  scratchEnd(); deck.seek(want);
+  const lim = P.done ? PREVIEW : limit();
+  if (wasPlaying && want < lim - .1) startPlay(); else { playing = false; setIcon(false); }
+};
 stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
 
 (function loop(now) {
   if (R && P && $("#game").offsetParent !== null) {
     const dt = (now - lastTs) / 1000; lastTs = now;
-    if (playing && !dragging) {
-      P.played += dt; P.rot += dt * DPS;
-      if (!P.done && audio.currentTime >= limit()) { stop(); audio.currentTime = limit(); if (R.mode === "intro" && P.stage < INTRO_STAGES.length - 1) $("#status").textContent = "Noch keine Ahnung? Hör etwas länger."; }
-      setRing(audio.currentTime);
+    if (dragging) scratchIdle();
+    else if (playing && !P.spinning) {
+      const r = rateNow();
+      P.played += dt * Math.min(1, r); P.rot += dt * DPS * r;
+      if (deck.mode === "el" && deck.brake) audio.playbackRate = Math.max(.1, r);
+      const t = deck.time();
+      if (!P.done && t >= limit()) { stop(); deck.seek(limit()); if (R.mode === "intro" && P.stage < INTRO_STAGES.length - 1) $("#status").textContent = "Noch keine Ahnung? Hör etwas länger."; }
+      setRing(Math.min(t, P.done ? PREVIEW : limit()));
     }
     $("#disc").style.transform = `rotate(${P.rot}deg)`;
     if (R.cover && !P.coverShown && !P.done && P.played >= R.cover && P.dz && P.dz.cover) showCover(false);
@@ -422,9 +612,30 @@ stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercan
 
 function showCover(paid) {
   P.coverShown = true;
-  const c = $("#cover"); c.style.filter = "blur(14px) saturate(1.2)"; $("#coverWrap").classList.add("on");
+  $("#cover").style.filter = paid ? "none" : "blur(14px) saturate(1.2)"; $("#coverWrap").classList.add("on");
   if (!paid) { toast("Cover-Hinweis aufgedeckt"); SFX.hint(); }
 }
+
+/* ---------- Mischpult-Bedienung ---------- */
+function renderMixer() {
+  $("#mxVol").value = MIX.vol; $("#mxTempo").value = MIX.tempo; $("#mxFilter").value = MIX.filter;
+  $("#mxVolV").textContent = MIX.vol;
+  $("#mxTempoV").textContent = (MIX.tempo > 0 ? "+" : "") + MIX.tempo + " %";
+  $("#mxFilterV").textContent = Math.abs(MIX.filter) < 5 ? "aus" : MIX.filter < 0 ? "Bass" : "Höhen";
+  $("#mxFilterRow").classList.toggle("off", deck.mode === "el");
+}
+$("#mixer").addEventListener("input", e => {
+  const k = { mxVol: "vol", mxTempo: "tempo", mxFilter: "filter" }[e.target.id]; if (!k) return;
+  MIX[k] = +e.target.value; if (k === "filter" && Math.abs(MIX.filter) < 6) MIX.filter = 0;
+  store.set("mq-mix", MIX); applyMix(); renderMixer();
+});
+$("#mixer").addEventListener("click", e => {
+  const r = e.target.closest("[data-reset]");
+  if (r) { MIX[r.dataset.reset] = r.dataset.reset === "vol" ? 90 : 0; store.set("mq-mix", MIX); applyMix(); renderMixer(); SFX.tap(); return; }
+  const p = e.target.closest("[data-pad]"); if (!p) return;
+  getGraph(); p.classList.remove("hit"); void p.offsetWidth; p.classList.add("hit");
+  ({ rewind, brake, horn: airHorn })[p.dataset.pad]();
+});
 
 /* ---------- Jahre ---------- */
 function makeYears(years) {
@@ -455,7 +666,7 @@ const HINTS = [
   { id: "title", name: "Titel anspielen", desc: "Anfangsbuchstaben und Länge des Titels", run: s => ({ k: "Titel", v: mask(s[1]), code: true }) },
   { id: "year", name: "50:50 beim Jahr", desc: "Zwei falsche Jahre fliegen raus", ok: s => P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick).length >= 2,
     run: s => { P.struck = shuffle(P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick)).slice(0, 2); renderYears(); return { k: "Jahr", v: "Zwei falsche Jahre sind gestrichen" }; } },
-  { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, leicht verschwommen", ok: () => P.dz && P.dz.cover && !P.coverShown,
+  { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverShown,
     run: () => { showCover(true); return { k: "Cover", v: "Schau auf die CD" }; } },
 ];
 $("#hintBtn").onclick = () => {
@@ -479,11 +690,11 @@ $("#hintGrid").onclick = e => {
 };
 $("#more").onclick = () => {
   if (P.stage >= INTRO_STAGES.length - 1) return;
-  P.stage++; SFX.hint(); setRing(audio.currentTime);
+  P.stage++; SFX.hint(); setRing(deck.time());
   $("#more").innerHTML = P.stage >= INTRO_STAGES.length - 1 ? "Volle Länge" : `Länger hören <em>−1</em>`;
   $("#more").disabled = P.stage >= INTRO_STAGES.length - 1;
   $("#status").textContent = `Jetzt ${INTRO_STAGES[P.stage]} Sekunden. Kostet ${P.stage} ${P.stage > 1 ? "Punkte" : "Punkt"}.`;
-  if (!playing) $("#play").click();
+  if (!playing) startPlay();
 };
 
 /* ---------- Auflösen ---------- */
@@ -519,7 +730,7 @@ function submit(timeout) {
   const c = $("#cover"); c.style.filter = "none"; if (P.dz.cover) $("#coverWrap").classList.add("on");
   const dzl = $("#dz"); if (P.dz.link) { dzl.href = P.dz.link; dzl.classList.remove("hide"); } else dzl.classList.add("hide");
   $("#guess").classList.add("hide"); $("#reveal").classList.remove("hide");
-  $("#status").textContent = "Dreh die CD, um weiterzuhören."; setRing(audio.currentTime);
+  $("#status").textContent = "Dreh die CD, um weiterzuhören."; setRing(deck.time());
   $("#more").classList.add("hide");
   const last = R.over || R.idx + 1 >= R.items.length;
   $("#next").textContent = R.over ? "Game over – zum Ergebnis" : last ? "Zum Ergebnis" : R.mode === "party" ? `Weiter: ${R.players[(R.idx + 1) % R.players.length].name}` : "Nächster Song";
