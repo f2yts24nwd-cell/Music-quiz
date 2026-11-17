@@ -20,8 +20,9 @@ const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacI
 if (isIPad) document.documentElement.classList.add("ipad");
 
 /* ============================ Einstellungen ============================ */
-const DEFAULTS = { theme: "original", name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, answer: "type", strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
+const DEFAULTS = { theme: "glass", name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, answer: "type", strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
 const S = Object.assign({}, DEFAULTS, store.get("mq-settings", {}));
+if (!store.get("mq-theme-v2", false)) { S.theme = "glass"; store.set("mq-theme-v2", true); store.set("mq-settings", S); } // Glass einmalig als neuer Standard
 const saveSettings = () => store.set("mq-settings", S);
 
 const SETTINGS = [
