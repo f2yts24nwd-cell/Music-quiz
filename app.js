@@ -75,6 +75,7 @@ const DZ_QUERIES = {
   hiphop: ["Hip Hop Classics", "90s Hip Hop", "R&B Classics", "2000s Hip Hop"],
   edm: ["EDM Hits", "House Classics", "Dance Hits", "Festival Hits"],
   latin: ["Latin Hits", "Reggaeton Classics", "Latin Pop", "Sommerhits"],
+  schluepfrig: ["KI Schlager", "AI Schlager Party", "Schlüpfrige Schlager", "Versaute Partyschlager", "Ballermann 18", "Malle versaut", "Zweideutige Schlager"],
 };
 [
   { id: "zehner", name: "2010er Hits", tagline: "Streaming-Ära: die Hits der 2010er", colors: ["#7fb2ff", "#ff9ad5"] },
@@ -82,6 +83,7 @@ const DZ_QUERIES = {
   { id: "hiphop", name: "Hip-Hop & R&B", tagline: "Klassiker von Old School bis heute", colors: ["#ffd23d", "#9b8cff"] },
   { id: "edm", name: "EDM & House", tagline: "Festival-Hymnen und Club-Bretter", colors: ["#2ee6ff", "#a347ff"] },
   { id: "latin", name: "Latin & Sommer", tagline: "Reggaeton, Latin Pop, Sommerhits", colors: ["#ff9500", "#ff2d55"] },
+  { id: "schluepfrig", name: "Schlüpfriger Schlager", tagline: "KI- und Malle-Schlager mit Augenzwinkern · ab 18", colors: ["#ff2d55", "#ff9ad5"], locked: true },
 ].forEach(g => GENRES.push(Object.assign({ songs: [], dynamic: true }, g)));
 GENRES.forEach(g => { if (DZ_QUERIES[g.id]) g.dz = DZ_QUERIES[g.id]; });
 
@@ -334,7 +336,7 @@ function renderHome() {
   $("#genreList").innerHTML = GENRES.map((g, i) => {
     const best = store.get("mq-best-" + g.id, 0);
     const c = g.colors ? `style="--c1:${g.colors[0]};--c2:${g.colors[1]}"` : "";
-    return `<button class="genre${g.live ? " live" : ""}" data-i="${i}" ${c}><div class="disc"></div><div><b>${esc(g.name)}</b><small>${esc(g.tagline)}</small></div>${best && !g.live ? `<span class="rec">★ ${best}</span>` : ""}</button>`;
+    return `<button class="genre${g.live ? " live" : ""}${g.locked ? " locked" : ""}" data-i="${i}" ${c}><div class="disc"></div><div><b>${esc(g.name)}</b><small>${esc(g.tagline)}</small></div>${best && !g.live ? `<span class="rec">★ ${best}</span>` : ""}</button>`;
   }).join("");
   const d = store.get("mq-daily-" + todayKey(), null);
   $("#daily").classList.toggle("done", !!d);
@@ -342,7 +344,21 @@ function renderHome() {
   $("#dailyGo").textContent = d ? "Üben" : "Los";
 }
 $("#modes").onclick = e => { const b = e.target.closest(".mode"); if (!b) return; SFX.tap(); mode = b.dataset.m; store.set("mq-mode", mode); renderHome(); };
-$("#genreList").onclick = e => { const b = e.target.closest(".genre"); if (b) { SFX.tap(); openSetup(GENRES[+b.dataset.i]); } };
+$("#genreList").onclick = e => { const b = e.target.closest(".genre"); if (!b) return; SFX.tap(); const g = GENRES[+b.dataset.i]; if (g.locked && !adultOK) askPin(g); else openSetup(g); };
+
+/* ---------- PIN-Sperre für Inhalte ab 18 ---------- */
+let adultOK = false, pinGenre = null;
+const PIN_HASH = "6e93262ce7c9eec921aa6432678d72b23f751ce34d9307849971efe4c74d873f";
+async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
+function askPin(g) { pinGenre = g; $("#pinIn").value = ""; $("#pinErr").textContent = ""; openSheet("pin"); setTimeout(() => $("#pinIn").focus(), 350); }
+async function checkPin() {
+  const v = $("#pinIn").value.trim(); if (v.length < 4) return;
+  let ok = false; try { ok = (await sha("mq-" + v)) === PIN_HASH; } catch (e) { ok = v === String(815).padStart(4, "0"); }
+  if (ok) { adultOK = true; closeSheet(true); SFX.good(); setTimeout(() => openSetup(pinGenre), 200); }
+  else { $("#pinErr").textContent = "Falscher PIN"; $("#pinIn").value = ""; SFX.bad(); $("#sheet-pin").classList.remove("shake"); void $("#sheet-pin").offsetWidth; $("#sheet-pin").classList.add("shake"); }
+}
+$("#pinIn").addEventListener("input", e => { e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4); if (e.target.value.length === 4) checkPin(); });
+$("#pinGo").onclick = checkPin;
 $("#daily").onclick = () => { SFX.tap(); startDaily(); };
 
 /* ============================ Setup-Sheet ============================ */

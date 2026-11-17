@@ -645,3 +645,13 @@ html[data-theme=glass] .cdj .tt-pitch span{color:#fff}
 .cdj-jog{max-width:13.4rem}
 .cdj ~ .time{display:none}
 .cdj ~ .status{margin-top:.5rem}
+
+/* ---------- PIN-Sperre ---------- */
+.genre.locked::after{content:"18+";position:absolute;top:.95rem;right:.9rem;font-size:.7rem;font-weight:900;letter-spacing:.04em;color:#fff;padding:.22rem .5rem;border-radius:7px;background:#ff2d55;box-shadow:0 0 12px #ff2d5588}
+.pin{display:block;width:100%;margin:.4rem 0 .3rem;text-align:center;letter-spacing:.8em;font:900 2rem Manrope,sans-serif;padding:.8rem 0 .8rem .8em;border-radius:var(--r-m);
+  background:var(--field);border:1.5px solid var(--line);color:var(--paper);outline:none}
+.pin:focus{border-color:var(--lilac)}
+.pin-err{min-height:1.2rem;margin:0 0 .8rem;text-align:center;color:var(--miss);font-weight:700;font-size:.9rem}
+.sheet.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translate(calc(-50% - 10px),0)}40%,80%{transform:translate(calc(-50% + 10px),0)}}
+html[data-theme=glass] .pin{background:#ffffff1f;border-color:#ffffff40;color:#fff}

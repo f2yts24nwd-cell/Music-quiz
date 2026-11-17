@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700;800&family=Audiowide&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
 <meta http-equiv="Cache-Control" content="no-cache">
-<script>window.APP_V="2026.11.17-15";</script>
-<link rel="stylesheet" href="style.css?v=2026.11.17-15">
+<script>window.APP_V="2026.11.17-16";</script>
+<link rel="stylesheet" href="style.css?v=2026.11.17-16">
 </head>
 <body>
 <div class="bgfx" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -181,6 +181,15 @@
   <ol class="board" id="board"></ol>
 </div>
 
+<div class="sheet" id="sheet-pin" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3>Ab 18 – PIN eingeben</h3>
+  <p class="sheet-sub">Dieses Genre kann anzügliche Texte enthalten.</p>
+  <input class="pin" id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••">
+  <p class="pin-err" id="pinErr"></p>
+  <button class="cta" id="pinGo">Freischalten</button>
+</div>
+
 <div class="sheet" id="sheet-confirm" role="dialog" aria-modal="true">
   <div class="grab"></div>
   <h3 id="confirmTitle"></h3>
@@ -198,15 +207,15 @@
 <div class="toast" id="toast"></div>
 
 <!-- Genres: neue Datei in genres/ anlegen und hier einbinden -->
-<script src="genres/trance.js?v=2026.11.17-15"></script>
-<script src="genres/charts.js?v=2026.11.17-15"></script>
-<script src="genres/achtziger.js?v=2026.11.17-15"></script>
-<script src="genres/eurodance.js?v=2026.11.17-15"></script>
-<script src="genres/nullerjahre.js?v=2026.11.17-15"></script>
-<script src="genres/deutschrap.js?v=2026.11.17-15"></script>
-<script src="genres/rock.js?v=2026.11.17-15"></script>
-<script src="genres/schlager.js?v=2026.11.17-15"></script>
-<script src="genres/kids.js?v=2026.11.17-15"></script>
-<script src="app.js?v=2026.11.17-15"></script>
+<script src="genres/trance.js?v=2026.11.17-16"></script>
+<script src="genres/charts.js?v=2026.11.17-16"></script>
+<script src="genres/achtziger.js?v=2026.11.17-16"></script>
+<script src="genres/eurodance.js?v=2026.11.17-16"></script>
+<script src="genres/nullerjahre.js?v=2026.11.17-16"></script>
+<script src="genres/deutschrap.js?v=2026.11.17-16"></script>
+<script src="genres/rock.js?v=2026.11.17-16"></script>
+<script src="genres/schlager.js?v=2026.11.17-16"></script>
+<script src="genres/kids.js?v=2026.11.17-16"></script>
+<script src="app.js?v=2026.11.17-16"></script>
 </body>
 </html>
