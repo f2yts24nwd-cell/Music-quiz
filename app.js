@@ -54,6 +54,85 @@ const BLITZ_SEC = 20;
 window.GENRES = window.GENRES || [];
 GENRES.splice(1, 0, { id: "live", name: "Live-Charts", tagline: "Was gerade läuft: die aktuellen Top 100 bei Deezer", colors: ["#ff7b9c", "#7ff3e6"], live: true, songs: [] });
 
+/* ============================ Deezer-Ausbau: mehr Songs pro Genre ============================ */
+// Jedes Genre holt sich zusätzlich Songs aus passenden Deezer-Playlists.
+const DZ_QUERIES = {
+  trance: ["Trance Classics", "Trance Anthems", "Vocal Trance Classics", "Trance 2000s"],
+  charts2526: ["Top Hits 2025", "Hits 2026", "Charts Deutschland 2025", "Top Deutschland"],
+  achtziger: ["80s Hits", "Best of 80s", "80er Hits", "80s Pop"],
+  eurodance: ["90s Dance", "Eurodance", "90er Hits", "90s Party"],
+  nullerjahre: ["2000s Hits", "00s Pop", "2000er Hits", "Throwback 2000s"],
+  deutschrap: ["Deutschrap Klassiker", "Deutschrap Hits", "Deutschrap Brandneu", "Deutschrap 2010er"],
+  rock: ["Rock Classics", "Classic Rock", "Rock Hymnen", "90s Rock"],
+  schlager: ["Schlager Hits", "Schlager Klassiker", "Ballermann Hits", "Party Schlager"],
+  kids: ["Disney Hits", "Kinderlieder", "Familien Hits", "Disney Songs"],
+  zehner: ["2010s Hits", "Best of 2010s", "2010er Hits", "Throwback 2010s"],
+  siebziger: ["70s Hits", "Disco Classics", "70er Hits", "Disco"],
+  hiphop: ["Hip Hop Classics", "90s Hip Hop", "R&B Classics", "2000s Hip Hop"],
+  edm: ["EDM Hits", "House Classics", "Dance Hits", "Festival Hits"],
+  latin: ["Latin Hits", "Reggaeton Classics", "Latin Pop", "Sommerhits"],
+};
+[
+  { id: "zehner", name: "2010er Hits", tagline: "Streaming-Ära: die Hits der 2010er", colors: ["#7fb2ff", "#ff9ad5"] },
+  { id: "siebziger", name: "70er & Disco", tagline: "Schlaghosen, Glitzerkugel, Groove", colors: ["#ffcf5c", "#ff7a3d"] },
+  { id: "hiphop", name: "Hip-Hop & R&B", tagline: "Klassiker von Old School bis heute", colors: ["#ffd23d", "#9b8cff"] },
+  { id: "edm", name: "EDM & House", tagline: "Festival-Hymnen und Club-Bretter", colors: ["#2ee6ff", "#a347ff"] },
+  { id: "latin", name: "Latin & Sommer", tagline: "Reggaeton, Latin Pop, Sommerhits", colors: ["#ff9500", "#ff2d55"] },
+].forEach(g => GENRES.push(Object.assign({ songs: [], dynamic: true }, g)));
+GENRES.forEach(g => { if (DZ_QUERIES[g.id]) g.dz = DZ_QUERIES[g.id]; });
+
+const cleanTitle = t => String(t || "")
+  .replace(/\s*[\(\[][^\)\]]*\b(remaster(ed)?|radio edit|single version|edit|version|mix|mono|stereo|live|feat\.?|ft\.?|with)\b[^\)\]]*[\)\]]/ig, "")
+  .replace(/\s+[-–]\s+.*\b(remaster(ed)?|radio edit|single version|edit|version|mix|mono|live)\b.*$/i, "").trim();
+const songKey = (a, t) => norm(String(a).split(/,|&| feat| x /i)[0]) + "|" + norm(cleanTitle(t));
+const BAD_ALBUM = /\b(karaoke|tribute|cover|instrumental|workout|lullaby|8-bit|piano|made famous|in the style)\b/i;
+async function loadExtra(g) {
+  if (!g.dz) return [];
+  if (g._extra) return g._extra;
+  const ck = "mq-dz-" + g.id, cached = store.get(ck, null);
+  if (cached && Date.now() - cached.t < 3 * 864e5 && cached.s.length) return (g._extra = cached.s);
+  const have = new Set(g.songs.map(s => songKey(s[0], s[1]))), out = [];
+  const lists = (await Promise.allSettled(g.dz.map(q => jsonp("search/playlist?limit=6&q=" + encodeURIComponent(q)))))
+    .flatMap(r => r.status === "fulfilled" ? (r.value.data || []).filter(p => p.nb_tracks >= 20).slice(0, 2) : []);
+  const ids = [...new Set(lists.map(p => p.id))].slice(0, 8);
+  const tracks = await Promise.allSettled(ids.map(id => jsonp(`playlist/${id}/tracks?limit=200`)));
+  tracks.forEach(r => { if (r.status !== "fulfilled") return; (r.value.data || []).forEach(t => {
+    if (!t.preview || !t.artist || BAD_ALBUM.test((t.album && t.album.title) || "") || BAD_ALBUM.test(t.title)) return;
+    const title = cleanTitle(t.title_short || t.title), k = songKey(t.artist.name, title);
+    if (!title || have.has(k)) return; have.add(k);
+    out.push([t.artist.name, title, null, dzOf(t)]);
+  }); });
+  if (out.length) store.set(ck, { t: Date.now(), s: out });
+  return (g._extra = out);
+}
+// Erscheinungsjahr: früheste Veröffentlichung über alle passenden Alben (Sampler & Remaster zählen nicht)
+const yearCache = store.get("mq-years", {});
+async function resolveYear(song) {
+  const k = songKey(song[0], song[1]);
+  if (yearCache[k]) return yearCache[k];
+  const ids = new Set(), yrs = [];
+  if (song[3] && song[3].albumId) ids.add(song[3].albumId);
+  try {
+    const d = await jsonp("search?limit=25&q=" + encodeURIComponent(`artist:"${song[0]}" track:"${cleanTitle(song[1])}"`));
+    (d.data || []).filter(x => matches(x.title_short || x.title, cleanTitle(song[1]), false, "normal") && matches(x.artist.name, song[0], true, "locker"))
+      .forEach(x => x.album && ids.add(x.album.id));
+  } catch (e) {}
+  const al = await Promise.allSettled([...ids].slice(0, 8).map(id => jsonp("album/" + id)));
+  al.forEach(r => { if (r.status !== "fulfilled") return; const a = r.value, y = parseInt(String(a.release_date).slice(0, 4), 10);
+    if (y > 1900 && y <= THIS_YEAR && !(a.record_type === "compile" && ids.size > 1)) yrs.push(y); });
+  const y = yrs.length ? Math.min(...yrs) : null;
+  if (y) { yearCache[k] = y; store.set("mq-years", yearCache); }
+  return y;
+}
+// Song vorbereiten: Vorschau + Jahr (für den nächsten Song schon im Hintergrund)
+const prepCache = new Map();
+function prepare(song) {
+  const key = song[0] + "|" + song[1];
+  if (prepCache.has(key)) return prepCache.get(key);
+  const p = (async () => { const dz = await lookup(song); if (!dz) return null; let years = song[2]; if (!years) { const y = await resolveYear(song); if (!y) return null; years = [y]; } return { dz, years }; })();
+  prepCache.set(key, p); return p;
+}
+
 /* ============================ Textvergleich ============================ */
 function norm(s) {
   return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
@@ -260,10 +339,16 @@ async function openSetup(g) {
   }
   $("#start").textContent = "Runde starten";
   $("#setupFilterWrap").classList.remove("hide");
+  if (g.dz) {
+    $("#setupTag").textContent = g._extra ? `${g.tagline} · ${g.songs.length + g._extra.length} Songs` : `${g.tagline} · lade mehr Songs von Deezer …`;
+    g._extraP = g._extraP || loadExtra(g).catch(() => []);
+    g._extraP.then(x => { if (setupGenre === g) $("#setupTag").textContent = `${g.tagline} · ${g.songs.length + x.length} Songs`; });
+  }
   const groups = [...new Set(g.songs.map(s => groupOf(g, s)))].sort();
   $("#setupFilterLbl").textContent = g.groupBy === "year" ? "Jahre" : "Jahrzehnte";
   $("#setupFilter").innerHTML = groups.map(d => `<button class="chip on" data-v="${d}">${g.groupBy === "year" ? d : (d < 2000 ? String(d).slice(2) : d) + "er"}</button>`).join("");
   $("#setupFilterWrap").classList.toggle("hide", groups.length < 2);
+  if (g.dynamic) { $("#start").disabled = true; $("#start").textContent = "Lade Songs …"; g._extraP.then(x => { if (setupGenre !== g) return; $("#start").disabled = !x.length; $("#start").textContent = x.length ? "Runde starten" : "Deezer nicht erreichbar"; }); }
   openSheet("setup");
 }
 $("#setupFilter").onclick = e => { const b = e.target.closest(".chip"); if (!b) return; b.classList.toggle("on"); SFX.tap(); $("#start").disabled = !$("#setupFilter .on"); };
@@ -280,11 +365,17 @@ function renderSetupSummary() {
   const cover = mode === "intro" || !S.cover ? "aus" : "nach " + S.cover + " s";
   $("#setupSummary").innerHTML = `<b>${MODES[mode].name}</b> · ${count} · Hören ${listen} · Cover ${cover} · Tipps ${S.hints ? "an" : "aus"}<br><span style="color:var(--lilac)">Einstellungen ändern</span>`;
 }
-$("#start").onclick = () => {
-  const g = setupGenre; let songs = g.songs;
-  if (!g.live) { const sel = $$("#setupFilter .on").map(b => +b.dataset.v); songs = songs.filter(s => sel.includes(groupOf(g, s))); }
+$("#start").onclick = async () => {
+  const g = setupGenre; let songs = g.songs, allowed = null;
+  if (g._extraP && !g._extra) { $("#start").disabled = true; $("#start").textContent = "Lade Songs …"; await Promise.race([g._extraP, new Promise(r => setTimeout(r, 6000))]); $("#start").disabled = false; $("#start").textContent = "Runde starten"; }
+  if (!g.live) {
+    const chips = $$("#setupFilter .chip"), sel = $$("#setupFilter .on").map(b => +b.dataset.v);
+    songs = songs.filter(s => sel.includes(groupOf(g, s)));
+    if (chips.length > 1 && sel.length < chips.length) allowed = new Set(sel);
+    songs = songs.concat(g._extra || []);
+  }
   closeSheet(true);
-  startRound({ genre: g, songs, mode });
+  startRound({ genre: g, songs, mode, allowed });
 };
 
 /* ============================ Tages-Challenge ============================ */
@@ -628,7 +719,7 @@ function startRound(o) {
   const n = o.daily ? 5 : o.mode === "sudden" ? pool.length : Math.min(S.count, pool.length);
   const pl = o.mode === "party" ? players.map((p, i) => ({ name: p.trim() || "Spieler " + (i + 1), score: 0 })) : [{ name: S.name.trim() || "Du", score: 0 }];
   R = { genre: o.genre, mode: o.mode, daily: !!o.daily, practice: !!o.practice, items: pool.splice(0, n).map(s => ({ song: s })), pool, idx: 0,
-    players: pl, results: [], streak: 0, over: false,
+    players: pl, results: [], streak: 0, over: false, allowed: o.allowed || null,
     listen: o.daily ? 30 : S.listen, cover: o.mode === "intro" ? 0 : (o.daily ? 20 : S.cover), hints: o.daily ? true : S.hints };
   setDiscColors($("#stage"), o.genre);
   $("#score").textContent = "0";
@@ -668,14 +759,15 @@ async function loadSong() {
   const handoff = R.mode === "party" && R.players.length > 1;
   if (handoff) { $("#handName").textContent = curPlayer().name; $("#handoff").classList.remove("hide"); }
   $("#status").textContent = "Song wird gesucht …";
-  let dz = null;
+  let dz = null; const myP = P;
   while (!dz && R.idx < R.items.length) {
-    dz = await lookup(R.items[R.idx].song);
-    if (!dz) { const spare = R.pool.shift(); if (spare) R.items[R.idx] = { song: spare }; else R.items.splice(R.idx, 1); }
+    const s = R.items[R.idx].song, pr = await prepare(s);
+    if (myP !== P) return;
+    if (pr && (!R.allowed || R.allowed.has(groupOf(R.genre, [s[0], s[1], pr.years])))) { dz = pr.dz; R.items[R.idx].song = [s[0], s[1], pr.years, pr.dz]; break; }
+    const spare = R.pool.shift(); if (spare) R.items[R.idx] = { song: spare }; else R.items.splice(R.idx, 1);
   }
   if (!dz) { $("#status").textContent = "Deezer ist gerade nicht erreichbar. Prüfe die Internetverbindung und starte die Runde neu."; return; }
-  const it = R.items[R.idx], myP = P; P.dz = dz;
-  if (!it.song[2]) { const y = dz.albumId && await yearOfAlbum(dz.albumId); it.song = [it.song[0], it.song[1], [y || THIS_YEAR], dz]; }
+  const it = R.items[R.idx]; P.dz = dz;
   P.yearOpts = makeYears(it.song[2]); renderYears();
   if (dz.cover) $("#cover").style.backgroundImage = `url("${dz.cover}")`;
   $("#status").textContent = "Song wird geladen …";
@@ -684,7 +776,7 @@ async function loadSong() {
   P.ready = true;
   if (!R.daily && !R.genre.live) { const k = "mq-seen-" + R.genre.id, l = store.get(k, []); l.push(it.song[0] + "|" + it.song[1]); store.set(k, l.slice(-400)); }
   renderTop(); setRing(0);
-  const nx = R.items[R.idx + 1]; if (nx) lookup(nx.song);
+  [1, 2].forEach(d => { const nx = R.items[R.idx + d]; if (nx) prepare(nx.song); });
   if (S.autoplay && !(handoff && !$("#handoff").classList.contains("hide"))) startPlay();
   else $("#status").textContent = "Tippe auf Play. Zum Spulen die CD drehen.";
 }
