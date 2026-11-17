@@ -13,7 +13,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
 const THIS_YEAR = new Date().getFullYear();
-const RING = 301.6, PREVIEW = 30, DPS = 60; // Grad pro Sekunde: eine CD-Umdrehung = 6 s
+const RING = 301.6, PREVIEW = 30, DPS = 60; // Scratch: eine Umdrehung der Platte = 6 s
 
 /* iPad erkennen (auch iPadOS, das sich als Mac ausgibt) */
 const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -28,13 +28,13 @@ const SETTINGS = [
   { key: "name", label: "Dein Name", desc: "Steht in der Bestenliste.", type: "text" },
   { key: "listen", label: "Hördauer", desc: "Wie lange der Ausschnitt laufen darf.", opts: [[10, "10 s"], [20, "20 s"], [30, "30 s"]] },
   { key: "count", label: "Songs pro Runde", opts: [[5, "5"], [10, "10"], [15, "15"], [20, "20"]] },
-  { key: "cover", label: "Verschwommenes Cover", desc: "Taucht nach dieser Hörzeit als Hilfe auf der CD auf.", opts: [[0, "Aus"], [10, "nach 10 s"], [20, "nach 20 s"]] },
+  { key: "cover", label: "Verschwommenes Cover", desc: "Taucht nach dieser Hörzeit als Bild auf der Platte auf.", opts: [[0, "Aus"], [10, "nach 10 s"], [20, "nach 20 s"]] },
   { key: "autoplay", label: "Automatisch abspielen", desc: "Der Song startet von selbst, sobald er geladen ist.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "hints", label: "Tipps", desc: "Tipps kosten je einen Punkt.", opts: [[true, "Erlaubt"], [false, "Aus"]] },
   { key: "strict", label: "Schreibweise", desc: "Wie genau Titel und Interpret stimmen müssen.", opts: [["locker", "Locker"], ["normal", "Normal"], ["streng", "Streng"]] },
   { key: "yearLevel", label: "Jahres-Auswahl", desc: "Wie nah die falschen Jahre am richtigen liegen.", opts: [["leicht", "Leicht"], ["normal", "Normal"], ["schwer", "Schwer"]] },
-  { key: "mixer", label: "Mischpult", desc: "Lautstärke, Tempo, Filter und Effekt-Pads unter der CD.", opts: [[true, "Anzeigen"], [false, "Ausblenden"]] },
-  { key: "scratch", label: "Scratch-Sound", desc: "Beim Drehen der CD wie ein DJ scratchen.", opts: [[true, "An"], [false, "Aus"]] },
+  { key: "mixer", label: "Mischpult", desc: "Lautstärke, Tempo, Filter und Effekt-Pads unter dem Plattenspieler.", opts: [[true, "Anzeigen"], [false, "Ausblenden"]] },
+  { key: "scratch", label: "Scratch-Sound", desc: "Beim Drehen der Platte wie ein DJ scratchen.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "sfx", label: "Soundeffekte", opts: [[true, "An"], [false, "Aus"]] },
 ];
 
@@ -797,17 +797,19 @@ async function loadSong() {
   renderTop(); setRing(0);
   [1, 2].forEach(d => { const nx = R.items[R.idx + d]; if (nx) prepare(nx.song); });
   if (S.autoplay && !(handoff && !$("#handoff").classList.contains("hide"))) startPlay();
-  else $("#status").textContent = "Tippe auf Play. Zum Spulen die CD drehen.";
+  else $("#status").textContent = "Tippe auf Start. Zum Spulen die Platte drehen.";
 }
 $("#handGo").onclick = () => { SFX.tap(); getGraph(); $("#handoff").classList.add("hide"); if (S.autoplay && P && P.ready && !playing) startPlay(); };
 
 /* ---------- Abspielen, Ring & Scrubbing ---------- */
-function setIcon(p) { $("#ico").innerHTML = p ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>'; }
+function setIcon(p) { $("#stage").classList.toggle("playing", p); setRing(P && P.ready ? deck.time() : 0);
+  $("#ico").innerHTML = p ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>'; }
 function stop() { deck.pause(); playing = false; setIcon(false); }
 function setRing(t) {
-  $("#ring").style.strokeDashoffset = RING * (1 - clamp(t, 0, PREVIEW) / PREVIEW);
+  $("#ring").style.width = clamp(t, 0, PREVIEW) / PREVIEW * 100 + "%";
   const lim = P && !P.done ? limit() : PREVIEW;
-  $("#ringLim").style.strokeDashoffset = RING * (1 - lim / PREVIEW);
+  $("#ringLim").style.width = lim / PREVIEW * 100 + "%";
+  const arm = playing || dragging ? 30 + 14 * clamp(t / PREVIEW, 0, 1) : 0; $("#stage").style.setProperty("--arm", arm + "deg");
   $("#tNow").textContent = fmt(t); $("#tMax").textContent = fmt(lim);
 }
 function startPlay() {
@@ -823,9 +825,9 @@ $("#play").onclick = () => { getGraph(); if (playing) stop(); else startPlay(); 
 audio.addEventListener("ended", stop);
 
 const stage = $("#stage"); let aPrev = 0, want = 0, tickAcc = 0, moveT = 0, wasPlaying = false;
-const angleAt = e => { const r = stage.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI; };
+const angleAt = e => { const r = $("#disc").getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180 / Math.PI; };
 stage.addEventListener("pointerdown", e => {
-  if (e.target.closest("#play") || !P || !P.ready || P.spinning) return;
+  if (!e.target.closest("#disc") || !P || !P.ready || P.spinning) return;
   getGraph();
   dragging = true; stage.classList.add("drag"); stage.setPointerCapture(e.pointerId);
   wasPlaying = playing; want = deck.time(); deck.pause();
@@ -858,13 +860,15 @@ stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercan
     if (dragging) scratchIdle();
     else if (playing && !P.spinning) {
       const r = rateNow();
-      P.played += dt * Math.min(1, r); P.rot += dt * DPS * r;
+      P.played += dt * Math.min(1, r); P.rot += dt * 200 * r; // 33⅓ U/min
       if (deck.mode === "el" && deck.brake) audio.playbackRate = Math.max(.1, r);
       const t = deck.time();
       if (!P.done && t >= limit()) { stop(); deck.seek(limit()); if (R.mode === "intro" && P.stage < INTRO_STAGES.length - 1) $("#status").textContent = "Noch keine Ahnung? Hör etwas länger."; }
       setRing(Math.min(t, P.done ? PREVIEW : limit()));
     }
     $("#disc").style.transform = `rotate(${P.rot}deg)`;
+    stage.classList.toggle("playing", playing);
+    stage.style.setProperty("--pitch", .5 - MIX.tempo / 32);
     if (R.cover && !P.coverShown && !P.done && P.played >= R.cover && P.dz && P.dz.cover) showCover(false);
     if (R.mode === "blitz" && P.blitzStart && !P.done) {
       const left = BLITZ_SEC - (now - P.blitzStart) / 1000;
@@ -1044,7 +1048,7 @@ const HINTS = [
   { id: "year", name: "50:50 beim Jahr", desc: "Zwei falsche Jahre fliegen raus", ok: s => P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick).length >= 2,
     run: s => { P.struck = shuffle(P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick)).slice(0, 2); renderYears(); return { k: "Jahr", v: "Zwei falsche Jahre sind gestrichen" }; } },
   { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverShown,
-    run: () => { showCover(true); return { k: "Cover", v: "Schau auf die CD" }; } },
+    run: () => { showCover(true); return { k: "Cover", v: "Schau auf die Platte" }; } },
 ];
 $("#hintBtn").onclick = () => {
   if (!P || !P.dz) return; SFX.tap();
@@ -1107,7 +1111,7 @@ function submit(timeout) {
   const c = $("#cover"); c.style.filter = "none"; if (P.dz.cover) $("#coverWrap").classList.add("on");
   const dzl = $("#dz"); if (P.dz.link) { dzl.href = P.dz.link; dzl.classList.remove("hide"); } else dzl.classList.add("hide");
   $("#guess").classList.add("hide"); $("#reveal").classList.remove("hide");
-  $("#status").textContent = "Dreh die CD, um weiterzuhören."; setRing(deck.time());
+  $("#status").textContent = "Dreh die Platte, um weiterzuhören."; setRing(deck.time());
   $("#more").classList.add("hide");
   const last = R.over || R.idx + 1 >= R.items.length;
   $("#next").textContent = R.over ? "Game over – zum Ergebnis" : last ? "Zum Ergebnis" : R.mode === "party" ? `Weiter: ${R.players[(R.idx + 1) % R.players.length].name}` : "Nächster Song";

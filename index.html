@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <meta http-equiv="Cache-Control" content="no-cache">
-<script>window.APP_V="2026.11.17-8";</script>
-<link rel="stylesheet" href="style.css?v=2026.11.17-8">
+<script>window.APP_V="2026.11.17-9";</script>
+<link rel="stylesheet" href="style.css?v=2026.11.17-9">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -64,11 +64,32 @@
 
   <div class="game-grid">
     <div class="stage-col">
-      <div class="stage" id="stage">
-        <svg class="ring" viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="48"/><circle class="lim" id="ringLim" cx="50" cy="50" r="48"/><circle class="fg" id="ring" cx="50" cy="50" r="48"/></svg>
-        <div class="disc big" id="disc"><div class="cover" id="coverWrap"><i id="cover"></i></div><div class="shine"></div></div>
-        <button class="playbtn" id="play" aria-label="Abspielen"><svg viewBox="0 0 24 24" id="ico"><path d="M8 5v14l11-7z"/></svg></button>
+      <div class="tt" id="stage">
+        <div class="tt-platter" id="disc">
+          <div class="tt-vinyl">
+            <div class="cover" id="coverWrap"><i id="cover"></i></div>
+            <div class="tt-grooves"></div>
+            <div class="tt-label"><span>33⅓</span></div>
+          </div>
+        </div>
+        <div class="tt-sheen"></div>
+        <div class="tt-spindle"></div>
+        <div class="tt-arm" id="arm"><svg viewBox="0 0 100 320" aria-hidden="true">
+          <defs><linearGradient id="armg" x1="0" x2="1"><stop offset="0" stop-color="#8d9098"/><stop offset=".5" stop-color="#f1f2f5"/><stop offset="1" stop-color="#7c7f87"/></linearGradient></defs>
+          <rect x="34" y="2" width="32" height="34" rx="6" fill="#1b1c20" stroke="#4a4c53"/>
+          <rect x="44" y="34" width="12" height="16" fill="url(#armg)"/>
+          <path d="M50 50 L50 205 Q50 238 36 262 L26 280" stroke="url(#armg)" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <path d="M14 272 l22 -6 l8 26 l-22 6 z" fill="#1b1c20" stroke="#5b5d64"/>
+          <rect x="18" y="292" width="10" height="6" rx="1" fill="#d3202b"/>
+        </svg></div>
+        <div class="tt-armbase"></div>
+        <div class="tt-rest"></div>
+        <div class="tt-strobe" id="strobe"></div>
+        <button class="tt-start" id="play" aria-label="Start / Stop"><svg viewBox="0 0 24 24" id="ico"><path d="M8 5v14l11-7z"/></svg><span>Start · Stop</span></button>
+        <div class="tt-rpm"><i class="on">33</i><i>45</i></div>
+        <div class="tt-pitch"><div class="tt-pslot"></div><div class="tt-pcap" id="pitchCap"></div><span>Pitch</span></div>
       </div>
+      <div class="tt-bar"><div class="tt-lim" id="ringLim"></div><div class="tt-fill" id="ring"></div></div>
       <div class="time"><span id="tNow">0:00</span> / <span id="tMax">0:30</span></div>
       <div class="status" id="status"></div>
       <button class="more hide" id="more">Länger hören <em>−1</em></button>
@@ -174,15 +195,15 @@
 <div class="toast" id="toast"></div>
 
 <!-- Genres: neue Datei in genres/ anlegen und hier einbinden -->
-<script src="genres/trance.js?v=2026.11.17-8"></script>
-<script src="genres/charts.js?v=2026.11.17-8"></script>
-<script src="genres/achtziger.js?v=2026.11.17-8"></script>
-<script src="genres/eurodance.js?v=2026.11.17-8"></script>
-<script src="genres/nullerjahre.js?v=2026.11.17-8"></script>
-<script src="genres/deutschrap.js?v=2026.11.17-8"></script>
-<script src="genres/rock.js?v=2026.11.17-8"></script>
-<script src="genres/schlager.js?v=2026.11.17-8"></script>
-<script src="genres/kids.js?v=2026.11.17-8"></script>
-<script src="app.js?v=2026.11.17-8"></script>
+<script src="genres/trance.js?v=2026.11.17-9"></script>
+<script src="genres/charts.js?v=2026.11.17-9"></script>
+<script src="genres/achtziger.js?v=2026.11.17-9"></script>
+<script src="genres/eurodance.js?v=2026.11.17-9"></script>
+<script src="genres/nullerjahre.js?v=2026.11.17-9"></script>
+<script src="genres/deutschrap.js?v=2026.11.17-9"></script>
+<script src="genres/rock.js?v=2026.11.17-9"></script>
+<script src="genres/schlager.js?v=2026.11.17-9"></script>
+<script src="genres/kids.js?v=2026.11.17-9"></script>
+<script src="app.js?v=2026.11.17-9"></script>
 </body>
 </html>
