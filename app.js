@@ -20,11 +20,12 @@ const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacI
 if (isIPad) document.documentElement.classList.add("ipad");
 
 /* ============================ Einstellungen ============================ */
-const DEFAULTS = { name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, answer: "type", strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
+const DEFAULTS = { theme: "original", name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, answer: "type", strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
 const S = Object.assign({}, DEFAULTS, store.get("mq-settings", {}));
 const saveSettings = () => store.set("mq-settings", S);
 
 const SETTINGS = [
+  { key: "theme", label: "Design", desc: "Wie die App aussieht. Probier alle durch.", opts: [["original", "Original"], ["glass", "Glass"], ["pop", "Farbrausch"], ["retro", "Retro"]] },
   { key: "name", label: "Dein Name", desc: "Steht in der Bestenliste.", type: "text" },
   { key: "listen", label: "Hördauer", desc: "Wie lange der Ausschnitt laufen darf.", opts: [[10, "10 s"], [20, "20 s"], [30, "30 s"]] },
   { key: "count", label: "Songs pro Runde", opts: [[5, "5"], [10, "10"], [15, "15"], [20, "20"]] },
@@ -321,7 +322,7 @@ function renderHome() {
   $("#genreList").innerHTML = GENRES.map((g, i) => {
     const best = store.get("mq-best-" + g.id, 0);
     const c = g.colors ? `style="--c1:${g.colors[0]};--c2:${g.colors[1]}"` : "";
-    return `<button class="genre${g.live ? " live" : ""}" data-i="${i}"><div class="disc" ${c}></div><div><b>${esc(g.name)}</b><small>${esc(g.tagline)}</small></div>${best && !g.live ? `<span class="rec">★ ${best}</span>` : ""}</button>`;
+    return `<button class="genre${g.live ? " live" : ""}" data-i="${i}" ${c}><div class="disc"></div><div><b>${esc(g.name)}</b><small>${esc(g.tagline)}</small></div>${best && !g.live ? `<span class="rec">★ ${best}</span>` : ""}</button>`;
   }).join("");
   const d = store.get("mq-daily-" + todayKey(), null);
   $("#daily").classList.toggle("done", !!d);
@@ -1229,7 +1230,7 @@ function renderSettings() {
 $("#setList").onclick = e => {
   const b = e.target.closest(".seg button"); if (!b) return;
   const k = b.parentElement.dataset.k, def = SETTINGS.find(s => s.key === k);
-  S[k] = def.opts[+b.dataset.i][0]; saveSettings(); SFX.tap(); renderSettings();
+  S[k] = def.opts[+b.dataset.i][0]; saveSettings(); SFX.tap(); renderSettings(); if (k === "theme") applyTheme();
 };
 $("#setList").oninput = e => { const k = e.target.dataset.k; if (k) { S[k] = e.target.value; saveSettings(); } };
 $("#resetBoard").onclick = () => confirmBox("Bestenliste löschen?", "Alle Einträge und Rekorde auf diesem Gerät werden entfernt.", "Löschen", () => {
@@ -1264,6 +1265,14 @@ async function checkUpdate() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
 $("#ver").textContent = window.APP_V || "–";
+
+/* ============================ Design ============================ */
+const THEME_BG = { original: "#110a24", glass: "#0d0b1f", pop: "#ffe94d", retro: "#1a0630" };
+function applyTheme() {
+  document.documentElement.dataset.theme = S.theme;
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = THEME_BG[S.theme] || THEME_BG.original;
+}
+applyTheme();
 
 /* ============================ Start ============================ */
 renderHome();

@@ -430,3 +430,118 @@ svg{display:block}
 .mco{border:1.5px solid var(--line);background:var(--field);border-radius:var(--r-m);padding:.8rem .7rem;min-height:3.4rem;font-weight:700;font-size:.9rem;line-height:1.25;color:var(--paper);cursor:pointer;text-align:left;transition:all .2s var(--ease);word-break:break-word}
 .mco.on{background:var(--paper);color:var(--night);border-color:var(--paper)}
 .mco.out{opacity:.15;text-decoration:line-through;pointer-events:none}
+
+/* =====================================================================
+   DESIGNS (Einstellungen → Design)
+   ===================================================================== */
+.bgfx{display:none}
+
+/* ---------- 1) GLASS: farbige Lichter hinter mattiertem Glas ---------- */
+html[data-theme=glass]{--deep:#0d0b1f;--paper:#fff;--mute:#d7d3ef;--mute2:#bdb8de;--line:#ffffff2e;--line2:#ffffff44;--field:#ffffff14;--glass:#ffffff17;--glassB:#ffffff38}
+html[data-theme=glass] body{background:#0d0b1f;font-family:-apple-system,"SF Pro Text",Manrope,system-ui,sans-serif}
+html[data-theme=glass] .bgfx{display:block;position:fixed;inset:0;z-index:-1;overflow:hidden;background:#0d0b1f}
+html[data-theme=glass] .bgfx i{position:absolute;width:70vmax;height:70vmax;border-radius:50%;filter:blur(70px);opacity:.75;animation:blob 22s ease-in-out infinite alternate}
+html[data-theme=glass] .bgfx i:nth-child(1){background:#ff3d9a;left:-25vmax;top:-20vmax}
+html[data-theme=glass] .bgfx i:nth-child(2){background:#2f7bff;right:-30vmax;top:5vmax;animation-delay:-6s}
+html[data-theme=glass] .bgfx i:nth-child(3){background:#ffb020;left:-10vmax;bottom:-35vmax;animation-delay:-12s}
+html[data-theme=glass] .bgfx i:nth-child(4){background:#20e3b2;right:-20vmax;bottom:-25vmax;width:50vmax;height:50vmax;animation-delay:-18s}
+@keyframes blob{50%{transform:translate(8vmax,6vmax) scale(1.12)}100%{transform:translate(-6vmax,10vmax) scale(.92)}}
+html[data-theme=glass] :is(.daily,.genre,.iconbtn,.mode,.fld input,.slot,.mco,.r,.uh,.setup-summary,.hcard,.board li,.pod,.ghost,.chip,.hintbtn,.exact input,.player-row input,.set input[type=text]){
+  background:var(--glass)!important;border:1px solid var(--glassB)!important;-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  box-shadow:inset 0 1px 0 #ffffff55,inset 0 -1px 0 #ffffff12,0 .6rem 1.6rem -.8rem #0006!important;color:#fff}
+html[data-theme=glass] :is(.mode.on,.chip.on,.slot.on,.mco.on,.seg button.on){background:#ffffffe6!important;color:#14122b!important;border-color:#fff!important}
+html[data-theme=glass] .mode.on i{background:#14122b;color:#fff}
+html[data-theme=glass] .cta{background:linear-gradient(180deg,#ffffffd9,#ffffffa6);color:#14122b;border:1px solid #fff;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  box-shadow:inset 0 1px 0 #fff,0 .8rem 2rem -1rem #2f7bffaa;border-radius:999px;font-family:-apple-system,"SF Pro Display",Manrope,sans-serif;font-weight:800;letter-spacing:-.01em}
+html[data-theme=glass] .hintbtn{border-radius:999px;color:#fff}
+html[data-theme=glass] .logo{font-family:-apple-system,"SF Pro Display",Manrope,sans-serif;font-weight:900;letter-spacing:-.05em}
+html[data-theme=glass] .logo span:last-child{background:linear-gradient(100deg,#fff,#ffd6f0 40%,#cfe0ff);-webkit-background-clip:text;background-clip:text}
+html[data-theme=glass] :is(.sec,.daily-txt b,.genre b,.a-t,.f-n,.sheet h3,.score){font-family:-apple-system,"SF Pro Display",Manrope,sans-serif;font-weight:800;letter-spacing:-.02em}
+html[data-theme=glass] .f-n{background:linear-gradient(100deg,#fff,#ffd6f0);-webkit-background-clip:text;background-clip:text}
+html[data-theme=glass] .sheet{background:#ffffff1f;-webkit-backdrop-filter:blur(40px) saturate(200%);backdrop-filter:blur(40px) saturate(200%);border:1px solid #ffffff40;box-shadow:inset 0 1px 0 #ffffff70,0 -2rem 4rem #0007}
+html[data-theme=glass] .scrim{background:#0006}
+html[data-theme=glass] .tick{background:transparent;text-shadow:0 1px 6px #0008}
+html[data-theme=glass] .tl::before{background:#ffffff66}
+html[data-theme=glass] .tt{box-shadow:0 1.6rem 3rem -1.2rem #000,0 0 0 1px #ffffff30,inset 0 1px 0 #ffffff40}
+html[data-theme=glass] .daily{border-radius:28px}
+html[data-theme=glass] .genre{border-radius:26px}
+html[data-theme=glass] .dots i{background:#ffffff33}
+html[data-theme=glass] .toast{background:#ffffffe6;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-radius:999px}
+html[data-theme=glass] .handoff{background:#0d0b1fcc;-webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px)}
+
+/* ---------- 2) FARBRAUSCH: knallige Farbflächen, große Schrift ---------- */
+html[data-theme=pop]{--deep:#ffe94d;--paper:#120a1f;--mute:#3b2d52;--mute2:#5a4a72;--line:#120a1f;--line2:#120a1f;--field:#fff;--night:#120a1f}
+html[data-theme=pop] body{background:#ffe94d;color:#120a1f;font-family:"Bricolage Grotesque",Manrope,sans-serif}
+html[data-theme=pop] .bgfx{display:block;position:fixed;inset:0;z-index:-1;background:#ffe94d}
+html[data-theme=pop] .bgfx i:nth-child(1){position:absolute;right:-30vw;top:-20vw;width:80vw;height:80vw;border-radius:50%;background:#ff4fa3}
+html[data-theme=pop] .bgfx i:nth-child(2){position:absolute;left:-25vw;bottom:-15vw;width:70vw;height:70vw;border-radius:40% 60% 30% 70%;background:#5b4bff}
+html[data-theme=pop] .bgfx i:nth-child(3){position:absolute;left:55vw;bottom:20vh;width:22vw;height:22vw;border-radius:50%;background:#20d39a}
+html[data-theme=pop] :is(.logo,.sec,.genre b,.daily-txt b,.a-t,.f-n,.sheet h3,.score,.cta){font-family:"Bricolage Grotesque",sans-serif;font-weight:800;letter-spacing:-.03em}
+html[data-theme=pop] .logo{font-size:clamp(3rem,15vw,4.4rem)}
+html[data-theme=pop] .logo span:last-child{background:none;color:#fff;-webkit-text-stroke:3px #120a1f;paint-order:stroke fill}
+html[data-theme=pop] :is(.daily,.genre,.iconbtn,.mode,.chip,.fld input,.slot,.mco,.r,.uh,.setup-summary,.hcard,.board li,.pod,.ghost,.hintbtn,.exact input,.player-row input,.set input[type=text],.summary div){
+  border:2.5px solid #120a1f!important;box-shadow:4px 4px 0 #120a1f!important;color:#120a1f}
+html[data-theme=pop] :is(.iconbtn,.mode,.chip,.fld input,.slot,.mco,.r,.uh,.setup-summary,.hcard,.board li,.pod,.ghost,.hintbtn,.exact input,.player-row input,.set input[type=text]){background:#fff!important}
+html[data-theme=pop] .iconbtn svg{stroke:#120a1f}
+html[data-theme=pop] .daily{background:#5b4bff!important;color:#fff;border-radius:22px}
+html[data-theme=pop] .daily-txt span{color:#e6e2ff}
+html[data-theme=pop] .daily-go{background:#ffe94d;color:#120a1f;border:2px solid #120a1f}
+html[data-theme=pop] .genre{background:linear-gradient(150deg,var(--c1),var(--c2))!important;border-radius:22px}
+html[data-theme=pop] .genre small{color:#120a1fcc}
+html[data-theme=pop] .genre .disc{box-shadow:0 0 0 2.5px #120a1f,3px 3px 0 #120a1f}
+html[data-theme=pop] :is(.mode.on,.chip.on,.slot.on,.mco.on,.seg button.on){background:#120a1f!important;color:#ffe94d!important}
+html[data-theme=pop] .mode.on i{background:#ffe94d;color:#120a1f}
+html[data-theme=pop] .cta{background:#ff4fa3;color:#120a1f;border:2.5px solid #120a1f;box-shadow:5px 5px 0 #120a1f;border-radius:18px;font-size:1.15rem}
+html[data-theme=pop] .cta:active{transform:translate(3px,3px);box-shadow:2px 2px 0 #120a1f}
+html[data-theme=pop] .hintbtn{color:#120a1f}
+html[data-theme=pop] .f-n{background:none;color:#ff4fa3;-webkit-text-stroke:3px #120a1f;paint-order:stroke fill}
+html[data-theme=pop] .sheet{background:#fff;border:3px solid #120a1f;color:#120a1f}
+html[data-theme=pop] .sheet-sub,html[data-theme=pop] .set p{color:#5a4a72}
+html[data-theme=pop] .seg{background:#f1ecff;border:2px solid #120a1f}
+html[data-theme=pop] .seg button{color:#120a1f}
+html[data-theme=pop] .tick{background:#ffe94d;color:#120a1f}
+html[data-theme=pop] .dots i{background:#120a1f33}.html[data-theme=pop] .dots i.now{background:#120a1f}
+html[data-theme=pop] .tt-bar{background:#120a1f22}html[data-theme=pop] .tt-fill{background:#120a1f}html[data-theme=pop] .tt-lim{background:#120a1f33}
+html[data-theme=pop] .time,html[data-theme=pop] .status{color:#3b2d52}
+html[data-theme=pop] .toast{background:#120a1f;color:#ffe94d}
+html[data-theme=pop] .handoff{background:#ff4fa3;color:#120a1f}
+html[data-theme=pop] .handoff p{color:#120a1f}
+html[data-theme=pop] .uh small{color:#c2185b}
+html[data-theme=pop] .p.ok{color:#0a8f5a}.html[data-theme=pop] .p.part{color:#b26a00}
+
+/* ---------- 3) RETRO: Synthwave-Sonnenuntergang mit Neon-Gitter ---------- */
+html[data-theme=retro]{--deep:#1a0630;--paper:#fff3fb;--mute:#e3b8ff;--mute2:#c58ef0;--line:#ff4fd866;--line2:#2ee6ff88;--field:#2a0c4acc;--lilac:#ff4fd8;--holo:#2ee6ff;--peach:#ffb347}
+html[data-theme=retro] body{background:#1a0630}
+html[data-theme=retro] .bgfx{display:block;position:fixed;inset:0;z-index:-1;overflow:hidden;
+  background:linear-gradient(180deg,#12021f 0%,#3a0b5c 30%,#a3155f 48%,#ff6a3d 56%,#1a0630 56.2%)}
+html[data-theme=retro] .bgfx i:nth-child(1){position:absolute;left:50%;top:22%;width:min(70vw,30rem);aspect-ratio:1;transform:translateX(-50%);border-radius:50%;
+  background:linear-gradient(180deg,#ffe066 0%,#ff9a3d 45%,#ff2e88 100%);
+  -webkit-mask:linear-gradient(#000 0 50%,transparent 0) top/100% 100% no-repeat,repeating-linear-gradient(180deg,#000 0 14px,transparent 14px 22px);-webkit-mask-composite:source-over;
+  mask:linear-gradient(#000 0 50%,transparent 0) top/100% 100% no-repeat,repeating-linear-gradient(180deg,#000 0 14px,transparent 14px 22px);
+  box-shadow:0 0 80px #ff2e8866;clip-path:inset(0 0 calc(100% - 34vh + 22%) 0)}
+html[data-theme=retro] .bgfx i:nth-child(2){position:absolute;left:-50%;right:-50%;top:56%;height:120%;transform-origin:top;transform:perspective(320px) rotateX(62deg);
+  background:linear-gradient(90deg,#ff4fd8 2px,transparent 2px) 0 0/60px 60px,linear-gradient(0deg,#ff4fd8 2px,transparent 2px) 0 0/60px 60px;
+  animation:grid 1.6s linear infinite;opacity:.75;-webkit-mask:linear-gradient(#0000,#000 25%);mask:linear-gradient(#0000,#000 25%)}
+@keyframes grid{to{background-position:0 60px,0 60px}}
+html[data-theme=retro] :is(.logo,.sec,.genre b,.daily-txt b,.a-t,.f-n,.sheet h3,.score,.cta){font-family:Audiowide,Unbounded,sans-serif;font-weight:400;letter-spacing:.02em}
+html[data-theme=retro] .logo{font-style:italic;text-shadow:0 0 18px #ff4fd8aa}
+html[data-theme=retro] .logo span:first-child{background:linear-gradient(180deg,#fff 0%,#9ff4ff 45%,#1b5cff 50%,#fff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 0 #2a0c4a)}
+html[data-theme=retro] .logo span:last-child{background:linear-gradient(180deg,#ffe066,#ff2e88);-webkit-background-clip:text;background-clip:text;color:transparent}
+html[data-theme=retro] :is(.daily,.genre,.iconbtn,.mode,.chip,.fld input,.slot,.mco,.r,.uh,.setup-summary,.hcard,.board li,.pod,.ghost,.hintbtn,.exact input,.player-row input,.set input[type=text]){
+  background:#21073dcc!important;border:1.5px solid #ff4fd888!important;box-shadow:0 0 14px #ff4fd833,inset 0 0 12px #2ee6ff14!important;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+html[data-theme=retro] .genre{border-color:#2ee6ff88!important;box-shadow:0 0 16px #2ee6ff33!important}
+html[data-theme=retro] :is(.mode.on,.chip.on,.slot.on,.mco.on,.seg button.on){background:linear-gradient(90deg,#ff2e88,#ff9a3d)!important;color:#fff!important;border-color:#ffe066!important;box-shadow:0 0 20px #ff2e8899!important}
+html[data-theme=retro] .mode.on i{background:#1a0630;color:#ffe066}
+html[data-theme=retro] .cta{background:linear-gradient(90deg,#2ee6ff,#ff4fd8 55%,#ffb347);color:#1a0630;box-shadow:0 0 24px #ff4fd888,0 0 0 2px #fff3fb inset;font-size:1rem}
+html[data-theme=retro] .f-n{background:linear-gradient(180deg,#ffe066,#ff2e88);-webkit-background-clip:text;background-clip:text;text-shadow:none;filter:drop-shadow(0 0 18px #ff2e8899)}
+html[data-theme=retro] .sheet{background:linear-gradient(180deg,#2c0b4f,#170427);border:1.5px solid #ff4fd888;box-shadow:0 -1rem 3rem #ff2e8833}
+html[data-theme=retro] .tick{background:#1a0630;color:#ffe066;text-shadow:0 0 8px #ff2e88}
+html[data-theme=retro] .daily{border-color:#ffe066!important}
+/* Hintergründe der Designs sichtbar machen */
+html[data-theme=glass],html[data-theme=glass] body{background:#0d0b1f}
+html[data-theme=glass] body,html[data-theme=pop] body,html[data-theme=retro] body{background:transparent!important}
+html[data-theme=pop]{background:#ffe94d}
+html[data-theme=retro]{background:#1a0630}
+.fld span{z-index:1}
+html[data-theme=pop] .exact{color:#c2185b}
+html[data-theme=pop] .genre.live::before{color:#fff;background:#120a1f}
