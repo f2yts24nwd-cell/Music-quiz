@@ -445,12 +445,13 @@ function getGraph() {
   G.vol = c.createGain();
   G.master = c.createGain();
   G.limit = c.createDynamicsCompressor();
-  G.limit.threshold.value = -9; G.limit.knee.value = 3; G.limit.ratio.value = 14; G.limit.attack.value = .002; G.limit.release.value = .12;
-  G.post = c.createGain(); G.post.gain.value = 1.35; // Make-up-Gain: lauter, der Limiter fängt die Spitzen
+  G.limit.threshold.value = -10; G.limit.knee.value = 2; G.limit.ratio.value = 20; G.limit.attack.value = .001; G.limit.release.value = .1;
+  G.post = c.createGain(); G.post.gain.value = 1.6; // laut machen …
+  G.clip = c.createWaveShaper(); { const n = 4096, cv = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1, ax = Math.abs(x); cv[i] = Math.sign(x) * (ax <= .8 ? ax : .8 + .19 * Math.tanh((ax - .8) / .19)); } G.clip.curve = cv; } // … und Spitzen weich abfangen
   G.split = c.createChannelSplitter(2); G.anL = c.createAnalyser(); G.anR = c.createAnalyser(); G.anL.fftSize = G.anR.fftSize = 512;
   G.input.connect(G.low).connect(G.mid).connect(G.hi).connect(G.filt).connect(G.gate).connect(G.vol).connect(G.master);
-  G.master.connect(G.limit).connect(G.post).connect(c.destination);
-  G.post.connect(G.split); G.split.connect(G.anL, 0); G.split.connect(G.anR, 1);
+  G.master.connect(G.limit).connect(G.post).connect(G.clip).connect(c.destination);
+  G.clip.connect(G.split); G.split.connect(G.anL, 0); G.split.connect(G.anR, 1);
   // Beat-FX (Send nach dem Kanalfader, Ausklingen nach dem Ausschalten)
   G.send = c.createGain(); G.send.gain.value = 0; G.vol.connect(G.send);
   G.wet = c.createGain(); G.wet.connect(G.master);
@@ -466,8 +467,9 @@ function getGraph() {
   tl.connect(G.transDepth).connect(G.gate.gain); tl.start();
   // Sampler-Bus: eigene Sättigung, etwas Echo-Fahne, durch den Limiter
   G.sampler = c.createGain(); G.sampler.gain.value = 1; G.sampler.connect(G.master);
-  G.sampEcho = c.createGain(); G.sampEcho.gain.value = .28; G.sampler.connect(G.sampEcho).connect(G.echo.in);
-  G.echoRet = c.createGain(); G.echoRet.gain.value = .5; G.echo.out.connect(G.echoRet).connect(G.master);
+  G.sDelay = c.createDelay(1); G.sDelay.delayTime.value = .25; const sfb = c.createGain(); sfb.gain.value = .32;
+  const slp = c.createBiquadFilter(); slp.type = "lowpass"; slp.frequency.value = 3200;
+  G.sDelay.connect(slp).connect(sfb).connect(G.sDelay); G.sEcho = c.createGain(); G.sEcho.gain.value = .55; slp.connect(G.sEcho).connect(G.master);
   graph = G; routeFx(); applyMix(); return G;
 }
 function routeFx() {
@@ -626,10 +628,10 @@ function noiseSrc(c, dest, t, len) { const s = c.createBufferSource(); s.buffer 
 const SAMPLES = {
   horn() { // Reggae-Airhorn: da-da-da daaaa
     const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01;
-    const pre = c.createGain(); pre.gain.value = .5; const dr = makeDrive(c, 5);
+    const pre = c.createGain(); pre.gain.value = .35; const dr = makeDrive(c, 4);
     const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 220;
     const pk = c.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = 1800; pk.gain.value = 6;
-    const post = c.createGain(); post.gain.value = .85;
+    const post = c.createGain(); post.gain.value = .55;
     pre.connect(dr).connect(hp).connect(pk).connect(post).connect(G.sampler);
     [[0, .12], [.16, .12], [.32, .12], [.48, .9]].forEach(([d, len], i) => {
       const g = c.createGain(); g.connect(pre); env(g, T + d, .012, 1, len - .05, .09);
@@ -642,9 +644,9 @@ const SAMPLES = {
   },
   siren() { // Dub-Siren mit Echo
     const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01, L = 2.4;
-    const g = c.createGain(); env(g, T, .02, .55, L - .3, .3);
+    const g = c.createGain(); env(g, T, .02, .32, L - .3, .3);
     const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200; g.connect(lp).connect(G.sampler);
-    const e = c.createGain(); e.gain.value = .7; lp.connect(e).connect(G.echo.in);
+    const e = c.createGain(); e.gain.value = .5; lp.connect(e).connect(G.sDelay);
     const o = osc(c, "square", 520, g, T, L);
     o.frequency.linearRampToValueAtTime(980, T + L);
     const l = c.createOscillator(); l.frequency.setValueAtTime(3, T); l.frequency.linearRampToValueAtTime(9, T + L);
@@ -653,7 +655,7 @@ const SAMPLES = {
   laser() { // pew pew pew
     const G = getGraph(); if (!G) return; const c = G.c, T = c.currentTime + .01;
     const dr = makeDrive(c, 4), out = c.createGain(); out.gain.value = .6; dr.connect(out).connect(G.sampler);
-    const e = c.createGain(); e.gain.value = .5; out.connect(e).connect(G.echo.in);
+    const e = c.createGain(); e.gain.value = .35; out.connect(e).connect(G.sDelay);
     [0, .14, .28, .42].forEach((d, i) => {
       const g = c.createGain(); g.connect(dr); env(g, T + d, .004, .9, .02, .2);
       const o = osc(c, i % 2 ? "sawtooth" : "square", 3200 - i * 300, g, T + d, .3);
@@ -667,8 +669,8 @@ const SAMPLES = {
     const o = osc(c, "sine", 170, g, T, 2.8); o.frequency.exponentialRampToValueAtTime(34, T + 1.6);
     const o2 = osc(c, "triangle", 85, g, T, 2.8); o2.frequency.exponentialRampToValueAtTime(30, T + 1.6);
     const nf = c.createBiquadFilter(); nf.type = "lowpass"; nf.frequency.setValueAtTime(6000, T); nf.frequency.exponentialRampToValueAtTime(120, T + .6);
-    const ng = c.createGain(); env(ng, T, .002, .9, .02, .7); nf.connect(ng).connect(G.sampler); noiseSrc(c, nf, T, .9);
-    const rv = c.createGain(); rv.gain.value = .5; ng.connect(rv).connect(G.reverb.in); G.reverb.out.connect(G.master);
+    const ng = c.createGain(); env(ng, T, .002, .6, .02, .45); nf.connect(ng).connect(G.sampler); noiseSrc(c, nf, T, .9);
+    const rv = c.createGain(); rv.gain.value = .18; ng.connect(rv).connect(G.reverb.in); G.reverb.out.connect(G.master);
     setTimeout(() => { try { G.reverb.out.disconnect(G.master); } catch (e) {} G.reverb.out.connect(G.wet); }, 3500);
   },
   riser() { // Build-up: Rauschen und Synth steigen, Song wird mitgefiltert
@@ -952,7 +954,7 @@ function renderMixer() {
     el.querySelector(".kring").style.background = `conic-gradient(from ${from}deg, var(--led) 0deg ${span}deg, transparent ${span}deg), conic-gradient(from -135deg, #ffffff16 0deg 270deg, transparent 270deg)`;
   });
   $$("#mixer .fader").forEach(el => { const k = el.dataset.k, [mn, mx] = FADERS[k]; el.querySelector(".cap").style.setProperty("--p", `calc((100% - 1.65rem) * ${1 - (MIX[k] - mn) / (mx - mn)})`); });
-  $$("#mixer [data-fx]").forEach(b => b.classList.toggle("on", b.dataset.fx === MIX.fx));
+  $$("#mixer [data-fx]").forEach(b => { b.classList.toggle("on", b.dataset.fx === MIX.fx); b.classList.toggle("live", b.dataset.fx === MIX.fx && MIX.fxOn); });
   $$("#mixer .knob").forEach(el => el.classList.toggle("moved", MIX[el.dataset.k] !== KNOBS[el.dataset.k][2]));
   $("#fxOn").classList.toggle("on", MIX.fxOn);
   $("#mixer").classList.toggle("lite", deck.mode === "el");
@@ -982,7 +984,7 @@ $("#mixer").addEventListener("pointermove", e => {
 ["pointerup", "pointercancel"].forEach(ev => $("#mixer").addEventListener(ev, () => { ctl = null; }));
 $("#mixer").addEventListener("click", e => {
   const fx = e.target.closest("[data-fx]");
-  if (fx) { MIX.fx = fx.dataset.fx; routeFx(); applyMix(); renderMixer(); lcd(fx.textContent.toUpperCase() + (MIX.fxOn ? " ON" : "")); return; }
+  if (fx) { getGraph(); const same = MIX.fx === fx.dataset.fx; MIX.fx = fx.dataset.fx; MIX.fxOn = same ? !MIX.fxOn : true; routeFx(); applyMix(); renderMixer(); lcd(MIX.fx.toUpperCase() + (MIX.fxOn ? " ON" : " OFF")); return; }
   if (e.target.closest("#fxOn")) { getGraph(); MIX.fxOn = !MIX.fxOn; routeFx(); applyMix(); renderMixer(); lcd(MIX.fx.toUpperCase() + (MIX.fxOn ? " ON" : " OFF")); return; }
   const p = e.target.closest("[data-pad]"); if (!p) return;
   getGraph(); p.classList.remove("hit"); void p.offsetWidth; p.classList.add("hit");
@@ -1112,12 +1114,12 @@ function submit(timeout) {
   renderTop(); countUp($("#score"), before, pl.score);
   $("#score").classList.add("bump"); setTimeout(() => $("#score").classList.remove("bump"), 350);
   if (cls === "ok") { SFX.good(); confetti(90); } else if (pts > 0) SFX.mid(); else SFX.bad();
-  if (innerWidth < 740) setTimeout(() => $("#reveal").scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  if (innerWidth < 740) setTimeout(() => scrollTo({ top: 0, behavior: "smooth" }), 60);
 }
 $("#next").onclick = () => {
   SFX.tap();
   if (R.over || R.idx + 1 >= R.items.length) return finish();
-  R.idx++; P.rot = 0; loadSong(); scrollTo({ top: 0, behavior: "smooth" });
+  R.idx++; P.rot = 0; scrollTo(0, 0); loadSong();
 };
 $("#quit").onclick = () => confirmBox("Runde beenden?", "Dein Punktestand dieser Runde geht verloren.", "Beenden", () => { stop(); R = null; renderHome(); show("home"); });
 
