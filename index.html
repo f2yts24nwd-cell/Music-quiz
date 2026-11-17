@@ -14,8 +14,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <meta http-equiv="Cache-Control" content="no-cache">
-<script>window.APP_V="2026.11.17-10";</script>
-<link rel="stylesheet" href="style.css?v=2026.11.17-10">
+<script>window.APP_V="2026.11.17-11";</script>
+<link rel="stylesheet" href="style.css?v=2026.11.17-11">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -97,10 +97,17 @@
 
     <div class="form-col">
       <form id="guess" autocomplete="off">
-        <label class="fld"><span>Titel</span><input id="gTitle" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next"></label>
-        <label class="fld"><span>Interpret</span><input id="gArtist" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label>
-        <div class="yearlbl">Erscheinungsjahr</div>
-        <div class="years" id="years"></div>
+        <div id="typeFields">
+          <label class="fld"><span>Titel</span><input id="gTitle" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next"></label>
+          <label class="fld"><span>Interpret</span><input id="gArtist" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label>
+        </div>
+        <div id="choiceFields" class="hide">
+          <div class="mc-lbl">Titel</div><div class="mc" id="mcTitle"></div>
+          <div class="mc-lbl">Interpret</div><div class="mc" id="mcArtist"></div>
+        </div>
+        <div class="yearhead"><span class="yearlbl">Wann erschienen?</span>
+          <label class="exact"><span>Genau +1</span><input id="gYear" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Jahr" autocomplete="off"></label></div>
+        <div class="tl" id="years"></div>
         <div class="usedhints" id="usedHints"></div>
         <div class="actions">
           <button type="button" class="hintbtn" id="hintBtn"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span>Tipp</span></button>
@@ -195,15 +202,15 @@
 <div class="toast" id="toast"></div>
 
 <!-- Genres: neue Datei in genres/ anlegen und hier einbinden -->
-<script src="genres/trance.js?v=2026.11.17-10"></script>
-<script src="genres/charts.js?v=2026.11.17-10"></script>
-<script src="genres/achtziger.js?v=2026.11.17-10"></script>
-<script src="genres/eurodance.js?v=2026.11.17-10"></script>
-<script src="genres/nullerjahre.js?v=2026.11.17-10"></script>
-<script src="genres/deutschrap.js?v=2026.11.17-10"></script>
-<script src="genres/rock.js?v=2026.11.17-10"></script>
-<script src="genres/schlager.js?v=2026.11.17-10"></script>
-<script src="genres/kids.js?v=2026.11.17-10"></script>
-<script src="app.js?v=2026.11.17-10"></script>
+<script src="genres/trance.js?v=2026.11.17-11"></script>
+<script src="genres/charts.js?v=2026.11.17-11"></script>
+<script src="genres/achtziger.js?v=2026.11.17-11"></script>
+<script src="genres/eurodance.js?v=2026.11.17-11"></script>
+<script src="genres/nullerjahre.js?v=2026.11.17-11"></script>
+<script src="genres/deutschrap.js?v=2026.11.17-11"></script>
+<script src="genres/rock.js?v=2026.11.17-11"></script>
+<script src="genres/schlager.js?v=2026.11.17-11"></script>
+<script src="genres/kids.js?v=2026.11.17-11"></script>
+<script src="app.js?v=2026.11.17-11"></script>
 </body>
 </html>

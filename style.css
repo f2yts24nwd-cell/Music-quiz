@@ -411,3 +411,22 @@ svg{display:block}
   .pads{grid-template-columns:repeat(8,1fr)}
 }
 .fame-note{color:var(--mute);font-size:.82rem;margin:.55rem 0 0;line-height:1.4}
+/* ---------- Jahr: Zeitstrahl ---------- */
+.yearhead{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin:1rem .2rem .55rem}
+.yearhead .yearlbl{margin:0}
+.exact{display:flex;align-items:center;gap:.45rem;font-size:.75rem;font-weight:800;color:var(--part)}
+.exact input{width:4.6rem;background:var(--field);border:1.5px solid transparent;color:var(--paper);border-radius:10px;padding:.5rem .6rem;font:800 .95rem Manrope,sans-serif;text-align:center;outline:none}
+.exact input:focus{border-color:var(--part)}
+.tl{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;padding-top:1.55rem}
+.tl::before{content:"";position:absolute;left:0;right:0;top:.62rem;height:2px;border-radius:1px;background:linear-gradient(90deg,transparent,var(--line2) 8%,var(--line2) 92%,transparent)}
+.tick{position:absolute;top:0;transform:translateX(-50%);font-family:Unbounded,sans-serif;font-weight:700;font-size:.78rem;color:var(--paper);background:var(--deep);padding:0 .3rem;line-height:1.3rem}
+.tick::after{content:"";position:absolute;left:50%;top:1.3rem;width:2px;height:.55rem;margin-left:-1px;background:var(--line2)}
+.slot{border:1.5px solid var(--line);background:transparent;border-radius:var(--r-s);padding:.85rem .1rem;font-weight:800;font-size:.8rem;color:var(--mute);cursor:pointer;transition:all .2s var(--ease)}
+.slot.on{background:var(--paper);color:var(--night);border-color:var(--paper);transform:translateY(-2px)}
+.slot.out{opacity:.15;text-decoration:line-through;pointer-events:none}
+/* ---------- Multiple Choice ---------- */
+.mc-lbl{font-size:.8rem;font-weight:700;color:var(--mute2);margin:.2rem .2rem .45rem}
+.mc{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.8rem}
+.mco{border:1.5px solid var(--line);background:var(--field);border-radius:var(--r-m);padding:.8rem .7rem;min-height:3.4rem;font-weight:700;font-size:.9rem;line-height:1.25;color:var(--paper);cursor:pointer;text-align:left;transition:all .2s var(--ease);word-break:break-word}
+.mco.on{background:var(--paper);color:var(--night);border-color:var(--paper)}
+.mco.out{opacity:.15;text-decoration:line-through;pointer-events:none}

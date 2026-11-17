@@ -20,7 +20,7 @@ const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === "MacI
 if (isIPad) document.documentElement.classList.add("ipad");
 
 /* ============================ Einstellungen ============================ */
-const DEFAULTS = { name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
+const DEFAULTS = { name: "", listen: 30, count: 10, cover: 20, hints: true, autoplay: true, answer: "type", strict: "locker", yearLevel: "normal", mixer: true, scratch: true, sfx: true };
 const S = Object.assign({}, DEFAULTS, store.get("mq-settings", {}));
 const saveSettings = () => store.set("mq-settings", S);
 
@@ -31,6 +31,7 @@ const SETTINGS = [
   { key: "cover", label: "Verschwommenes Cover", desc: "Taucht nach dieser Hörzeit als Bild auf der Platte auf.", opts: [[0, "Aus"], [10, "nach 10 s"], [20, "nach 20 s"]] },
   { key: "autoplay", label: "Automatisch abspielen", desc: "Der Song startet von selbst, sobald er geladen ist.", opts: [[true, "An"], [false, "Aus"]] },
   { key: "hints", label: "Tipps", desc: "Tipps kosten je einen Punkt.", opts: [[true, "Erlaubt"], [false, "Aus"]] },
+  { key: "answer", label: "Antworten", desc: "Eintippen oder aus Vorschlägen wählen – gilt für alle Modi, auch Party.", opts: [["type", "Eintippen"], ["choice", "Vorschläge"]] },
   { key: "strict", label: "Schreibweise", desc: "Wie genau Titel und Interpret stimmen müssen.", opts: [["locker", "Locker"], ["normal", "Normal"], ["streng", "Streng"]] },
   { key: "yearLevel", label: "Jahres-Auswahl", desc: "Wie nah die falschen Jahre am richtigen liegen.", opts: [["leicht", "Leicht"], ["normal", "Normal"], ["schwer", "Schwer"]] },
   { key: "mixer", label: "Mischpult", desc: "Lautstärke, Tempo, Filter und Effekt-Pads unter dem Plattenspieler.", opts: [[true, "Anzeigen"], [false, "Ausblenden"]] },
@@ -44,6 +45,7 @@ const MODES = {
   blitz:   { name: "Blitz", icon: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', desc: "20 Sekunden pro Song, ab dem ersten Ton. Wer schneller auflöst, kassiert bis zu 2 Bonuspunkte." },
   intro:   { name: "Intro-Profi", icon: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>', desc: "Nur 2 Sekunden Musik. Jede Verlängerung kostet einen Punkt – erkennst du es früh, gewinnst du." },
   sudden:  { name: "Sudden Death", icon: '<path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/>', desc: "Endlos-Runde. Sobald du Titel und Interpret verpasst, ist Schluss." },
+  choice:  { name: "Multiple Choice", icon: '<path d="M4 6h2M4 12h2M4 18h2M9 6h11M9 12h11M9 18h11"/>', desc: "Titel und Interpret aus je vier Vorschlägen antippen – kein Eintippen nötig." },
   party:   { name: "Party", icon: '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M14 20a4.5 4.5 0 0 1 7-3.7"/>', desc: "2 bis 6 Leute, ein Gerät. Ihr seid abwechselnd dran, am Ende gibt es ein Treppchen." },
 };
 let mode = store.get("mq-mode", "classic");
@@ -751,7 +753,7 @@ function startRound(o) {
   const n = o.daily ? 5 : o.mode === "sudden" ? pool.length : Math.min(S.count, pool.length);
   const pl = o.mode === "party" ? players.map((p, i) => ({ name: p.trim() || "Spieler " + (i + 1), score: 0 })) : [{ name: S.name.trim() || "Du", score: 0 }];
   R = { genre: o.genre, mode: o.mode, daily: !!o.daily, practice: !!o.practice, items: pool.splice(0, n).map(s => ({ song: s })), pool, idx: 0,
-    players: pl, results: [], streak: 0, over: false, allowed: o.allowed || null,
+    players: pl, results: [], streak: 0, over: false, allowed: o.allowed || null, choice: o.mode === "choice" || S.answer === "choice",
     listen: o.daily ? 30 : S.listen, cover: o.mode === "intro" ? 0 : (o.daily ? 20 : S.cover), hints: o.daily ? true : S.hints };
   setDiscColors($("#stage"), o.genre);
   $("#score").textContent = "0";
@@ -779,10 +781,11 @@ function renderTop() {
 
 async function loadSong() {
   stop(); deck.stop(); loadToken++; resetMixer(); WAVE = null;
-  P = { yearOpts: [], yearPick: null, struck: [], hints: [], played: 0, coverShown: false, stage: 0, blitzStart: null, seek: 0, rot: 0, dz: null, done: false, ready: false };
+  P = { refs: [], slot: null, mc: null, struck: [], hints: [], played: 0, coverShown: false, stage: 0, blitzStart: null, seek: 0, rot: 0, dz: null, done: false, ready: false };
   $("#coverWrap").className = "cover"; $("#cover").style.backgroundImage = ""; $("#cover").style.filter = "";
   $("#guess").classList.remove("hide"); $("#reveal").classList.add("hide");
-  $("#gTitle").value = ""; $("#gArtist").value = ""; $("#usedHints").innerHTML = ""; $("#years").innerHTML = "";
+  $("#gTitle").value = ""; $("#gArtist").value = ""; $("#gYear").value = ""; $("#mcTitle").innerHTML = ""; $("#mcArtist").innerHTML = "";
+  $("#typeFields").classList.toggle("hide", R.choice); $("#choiceFields").classList.toggle("hide", !R.choice); $("#usedHints").innerHTML = ""; $("#years").innerHTML = "";
   $("#hintBtn").disabled = false;
   $("#more").classList.toggle("hide", R.mode !== "intro"); $("#more").disabled = false; $("#more").innerHTML = `Länger hören <em>−1</em>`;
   $("#blitzFill").style.transform = "scaleX(1)";
@@ -800,7 +803,8 @@ async function loadSong() {
   }
   if (!dz) { $("#status").textContent = "Deezer ist gerade nicht erreichbar. Prüfe die Internetverbindung und starte die Runde neu."; return; }
   const it = R.items[R.idx]; P.dz = dz;
-  P.yearOpts = makeYears(it.song[2]); renderYears();
+  P.refs = makeRefs(it.song[2]); renderYears();
+  if (R.choice) { P.mc = { title: mcOptions(it.song[1], 1, false), artist: mcOptions(it.song[0], 0, true), tPick: null, aPick: null, tStruck: [], aStruck: [] }; renderMC(); }
   if (dz.cover) $("#cover").style.backgroundImage = `url("${dz.cover}")`;
   $("#status").textContent = "Song wird geladen …";
   const ok = await deck.load(dz.preview);
@@ -1031,21 +1035,50 @@ const vuBuf = new Float32Array(512); let vuPeak = [0, 0];
 })();
 buildMixer();
 
-/* ---------- Jahre ---------- */
-function makeYears(years) {
-  const correct = years[Math.random() * years.length | 0];
-  const ok = y => !years.includes(y) && y <= THIS_YEAR && y >= 1950;
-  const range = (a, b) => { const r = []; for (let d = a; d <= b; d++) { if (ok(correct - d)) r.push(correct - d); if (ok(correct + d)) r.push(correct + d); } return r; };
-  const opts = new Set([correct]);
-  const plan = S.yearLevel === "leicht" ? [[4, 12, 2]] : S.yearLevel === "schwer" ? [[1, 2, 2]] : [[1, 3, 1], [3, 8, 1]];
-  plan.forEach(([a, b, k]) => shuffle(range(a, b)).slice(0, k).forEach(y => opts.add(y)));
-  shuffle(range(1, 15)).forEach(y => { if (opts.size < 3) opts.add(y); });
-  return [...opts].slice(0, 3).sort((a, b) => a - b);
+/* ---------- Jahr: auf dem Zeitstrahl einordnen ---------- */
+// Drei Jahreszahlen als Orientierung; der Song liegt davor, dazwischen oder danach.
+function makeRefs(years) {
+  const y = years[Math.random() * years.length | 0], bad = r => years.includes(r) || r > THIS_YEAR || r < 1950;
+  const gap = () => S.yearLevel === "leicht" ? 4 + (Math.random() * 5 | 0) : S.yearLevel === "schwer" ? 1 + (Math.random() * 2 | 0) : 2 + (Math.random() * 4 | 0);
+  for (let tries = 0; tries < 60; tries++) {
+    const k = Math.random() * 4 | 0, a = gap(), b = gap(), c = gap(); let r;
+    if (k === 0) r = [y + a, y + a + b, y + a + b + c];
+    else if (k === 1) r = [y - a, y + b, y + b + c];
+    else if (k === 2) r = [y - a - c, y - a, y + b];
+    else r = [y - a - b - c, y - a - b, y - a];
+    if (!r.some(bad) && !years.some(v => r.includes(v))) return r;
+  }
+  return [y - 6, y - 2, y + 3].map(r => Math.min(r, THIS_YEAR));
 }
+const slotOf = (refs, y) => y < refs[0] ? 0 : y < refs[1] ? 1 : y < refs[2] ? 2 : 3;
+const slotOk = (refs, slot, years) => years.some(y => !refs.includes(y) && slotOf(refs, y) === slot);
+const slotName = (r, i) => i === 0 ? `vor ${r[0]}` : i === 3 ? `nach ${r[2]}` : `${r[i - 1]}–${r[i]}`;
 function renderYears() {
-  $("#years").innerHTML = P.yearOpts.map(y => `<button type="button" class="year${y === P.yearPick ? " on" : ""}${P.struck.includes(y) ? " out" : ""}" data-y="${y}">${y}</button>`).join("");
+  const r = P.refs;
+  $("#years").innerHTML = [0, 1, 2, 3].map(i => `<button type="button" class="slot${P.slot === i ? " on" : ""}${P.struck.includes(i) ? " out" : ""}" data-s="${i}">${i === 0 ? "davor" : i === 3 ? "danach" : "zwischen"}</button>`).join("")
+    + r.map((y, i) => `<span class="tick" style="left:${(i + 1) * 25}%">${y}</span>`).join("");
 }
-$("#years").onclick = e => { const b = e.target.closest(".year"); if (!b) return; SFX.tap(); const y = +b.dataset.y; P.yearPick = P.yearPick === y ? null : y; renderYears(); };
+$("#years").onclick = e => { const b = e.target.closest(".slot"); if (!b) return; SFX.tap(); const s = +b.dataset.s; P.slot = P.slot === s ? null : s; renderYears(); };
+$("#gYear").oninput = e => { const v = e.target.value.replace(/\D/g, "").slice(0, 4); e.target.value = v; if (v.length === 4 && P && P.refs.length) { const y = +v; if (!P.refs.includes(y)) { P.slot = slotOf(P.refs, y); renderYears(); } } };
+
+/* ---------- Multiple Choice ---------- */
+function mcOptions(correct, field, isArtist, n = 4) {
+  const src = [...R.items.map(i => i.song), ...R.pool, ...(R.genre.songs || []), ...(R.genre._extra || [])];
+  const seen = new Set([norm(correct)]), out = [];
+  shuffle(src.map(s => s[field])).forEach(v => {
+    if (out.length >= n - 1 || !v) return; const k = norm(v);
+    if (seen.has(k) || matches(v, correct, isArtist, "normal") || matches(correct, v, isArtist, "normal")) return;
+    seen.add(k); out.push(v);
+  });
+  return shuffle([correct, ...out]);
+}
+function renderMC() {
+  const m = P.mc; if (!m) return;
+  const btn = (v, pick, struck, f) => `<button type="button" class="mco${pick === v ? " on" : ""}${struck.includes(v) ? " out" : ""}" data-f="${f}" data-v="${esc(v)}">${esc(v)}</button>`;
+  $("#mcTitle").innerHTML = m.title.map(v => btn(v, m.tPick, m.tStruck, "t")).join("");
+  $("#mcArtist").innerHTML = m.artist.map(v => btn(v, m.aPick, m.aStruck, "a")).join("");
+}
+$("#choiceFields").onclick = e => { const b = e.target.closest(".mco"); if (!b || !P.mc) return; SFX.tap(); const k = b.dataset.f === "t" ? "tPick" : "aPick"; P.mc[k] = P.mc[k] === b.dataset.v ? null : b.dataset.v; renderMC(); };
 
 /* ---------- Tipps ---------- */
 const ICONS = {
@@ -1056,10 +1089,12 @@ const ICONS = {
 };
 const mask = s => s.replace(/\(.*?\)/g, "").trim().split(/\s+/).map(w => w.replace(/^([^\p{L}\p{N}]*)(.)(.*)$/u, (m, p, f, r) => p + f + r.replace(/[\p{L}\p{N}]/gu, "_"))).join("  ");
 const HINTS = [
-  { id: "artist", name: "Interpret anspielen", desc: "Anfangsbuchstaben und Länge des Namens", run: s => ({ k: "Interpret", v: mask(s[0]), code: true }) },
-  { id: "title", name: "Titel anspielen", desc: "Anfangsbuchstaben und Länge des Titels", run: s => ({ k: "Titel", v: mask(s[1]), code: true }) },
-  { id: "year", name: "Jahr eingrenzen", desc: "Ein falsches Jahr fliegt raus", ok: s => P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick).length >= 1,
-    run: s => { P.struck = shuffle(P.yearOpts.filter(y => !s[2].includes(y) && y !== P.yearPick)).slice(0, 1); renderYears(); return { k: "Jahr", v: "Ein falsches Jahr ist gestrichen" }; } },
+  { id: "artist", name: "Interpret anspielen", desc: () => R.choice ? "Zwei falsche Interpreten fliegen raus" : "Anfangsbuchstaben und Länge des Namens",
+    run: s => R.choice ? (P.mc.aStruck = shuffle(P.mc.artist.filter(v => v !== s[0] && v !== P.mc.aPick)).slice(0, 2), renderMC(), { k: "Interpret", v: "Zwei falsche Interpreten gestrichen" }) : { k: "Interpret", v: mask(s[0]), code: true } },
+  { id: "title", name: "Titel anspielen", desc: () => R.choice ? "Zwei falsche Titel fliegen raus" : "Anfangsbuchstaben und Länge des Titels",
+    run: s => R.choice ? (P.mc.tStruck = shuffle(P.mc.title.filter(v => v !== s[1] && v !== P.mc.tPick)).slice(0, 2), renderMC(), { k: "Titel", v: "Zwei falsche Titel gestrichen" }) : { k: "Titel", v: mask(s[1]), code: true } },
+  { id: "year", name: "Jahr eingrenzen", desc: "Zwei falsche Bereiche fliegen raus", ok: s => [0, 1, 2, 3].filter(i => !slotOk(P.refs, i, s[2]) && i !== P.slot).length >= 2,
+    run: s => { P.struck = shuffle([0, 1, 2, 3].filter(i => !slotOk(P.refs, i, s[2]) && i !== P.slot)).slice(0, 2); renderYears(); return { k: "Jahr", v: "Zwei falsche Bereiche sind gestrichen" }; } },
   { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverShown,
     run: () => { showCover(true); return { k: "Cover", v: "Schau auf die Platte" }; } },
 ];
@@ -1068,7 +1103,7 @@ $("#hintBtn").onclick = () => {
   const s = R.items[R.idx].song;
   $("#hintGrid").innerHTML = HINTS.map(h => {
     const used = P.hints.includes(h.id), dis = used || (h.ok && !h.ok(s));
-    return `<button class="hcard" data-h="${h.id}" ${dis ? "disabled" : ""}><span class="cost">${used ? "genutzt" : "−1"}</span><span class="hi"><svg viewBox="0 0 24 24">${ICONS[h.id]}</svg></span><b>${h.name}</b><small>${h.desc}</small></button>`;
+    return `<button class="hcard" data-h="${h.id}" ${dis ? "disabled" : ""}><span class="cost">${used ? "genutzt" : "−1"}</span><span class="hi"><svg viewBox="0 0 24 24">${ICONS[h.id]}</svg></span><b>${h.name}</b><small>${typeof h.desc === "function" ? h.desc() : h.desc}</small></button>`;
   }).join("");
   openSheet("hints");
 };
@@ -1097,21 +1132,24 @@ function submit(timeout) {
   if (!P || !P.dz || P.done) return;
   P.done = true; stop(); document.activeElement && document.activeElement.blur && document.activeElement.blur();
   const it = R.items[R.idx], [artist, title, years] = it.song, pl = curPlayer();
-  const gt = $("#gTitle").value.trim(), ga = $("#gArtist").value.trim();
-  const tOk = matches(gt, title), aOk = matches(ga, artist, true);
-  let yP = 0; if (P.yearPick != null) { const d = Math.min(...years.map(y => Math.abs(y - P.yearPick))); yP = d === 0 ? 3 : d === 1 ? 1 : 0; }
-  const raw = (tOk ? 2 : 0) + (aOk ? 2 : 0) + yP;
+  const gt = R.choice ? (P.mc.tPick || "") : $("#gTitle").value.trim(), ga = R.choice ? (P.mc.aPick || "") : $("#gArtist").value.trim();
+  const tOk = R.choice ? gt === title : matches(gt, title), aOk = R.choice ? ga === artist : matches(ga, artist, true);
+  const exact = /^\d{4}$/.test($("#gYear").value) ? +$("#gYear").value : null;
+  if (P.slot == null && exact && !P.refs.includes(exact)) P.slot = slotOf(P.refs, exact);
+  const yP = P.slot != null && slotOk(P.refs, P.slot, years) ? 3 : 0, exOk = exact != null && years.includes(exact);
+  const raw = (tOk ? 2 : 0) + (aOk ? 2 : 0) + yP + (exOk ? 1 : 0);
   const cost = P.hints.length + (R.mode === "intro" ? P.stage : 0);
   let pts = Math.max(0, raw - cost);
   const rows = [];
-  rows.push(["Titel", gt, tOk ? 2 : 0, 2], ["Interpret", ga, aOk ? 2 : 0, 2], ["Jahr", P.yearPick, yP, 3]);
+  rows.push(["Titel", gt, tOk ? 2 : 0, 2], ["Interpret", ga, aOk ? 2 : 0, 2], ["Jahr", P.slot != null ? slotName(P.refs, P.slot) : "", yP, 3]);
+  if (exact != null) rows.push(["Genaues Jahr (Bonus)", exact, exOk ? 1 : 0, 1]);
   const extra = [];
   if (cost && raw) extra.push([R.mode === "intro" && P.stage ? "Tipps & Verlängerung" : P.hints.length > 1 ? `${P.hints.length} Tipps` : "Tipp", -Math.min(cost, raw)]);
   if (R.mode === "blitz" && !timeout && raw > 0) { const el = (performance.now() - P.blitzStart) / 1000; const b = P.blitzStart ? (el <= 8 ? 2 : el <= 14 ? 1 : 0) : 0; if (b) { pts += b; extra.push([`Blitz-Bonus (${el.toFixed(1)} s)`, b]); } }
   if (R.mode !== "party") { R.streak = pts >= 4 ? R.streak + 1 : 0; if (R.streak >= 3) { pts += 1; extra.push([`${R.streak}er-Serie`, 1]); } }
   if (timeout) extra.push(["Zeit abgelaufen", 0]);
   const before = pl.score; pl.score += pts;
-  const cls = raw === 7 && !cost ? "ok" : pts > 0 ? "part" : "miss";
+  const cls = raw >= 7 && !cost ? "ok" : pts > 0 ? "part" : "miss";
   R.results.push({ song: it.song, pts, cls, player: pl.name });
   if (R.mode === "sudden" && !tOk && !aOk) R.over = true;
 
