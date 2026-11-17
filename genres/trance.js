@@ -5,7 +5,7 @@ GENRES.push({
   id: "trance",
   name: "Trance",
   tagline: "Die großen Hymnen 1990–2017",
-  colors: ["#00e5ff", "#ff2bd6"],
+  colors: ["#7ff3e6", "#c9b8ff"],
   songs: [
  ["The Age of Love","The Age of Love",[1990]],
  ["Jam & Spoon","Stella",[1992]],

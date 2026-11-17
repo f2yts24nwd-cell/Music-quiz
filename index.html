@@ -5,470 +5,177 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Music Quiz</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Music Quiz">
-<meta name="theme-color" content="#1a1033">
+<meta name="theme-color" content="#110a24">
+<link rel="apple-touch-icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --night:#1a1033; --deep:#110a24; --lilac:#b9a4ff; --peach:#ffb38a; --holo:#7ff3e6; --paper:#f6f3ff;
-  --mute:#a99fd0; --line:#3a2d66; --field:#24184a;
-  --ok:#7ff3a8; --part:#ffd27a; --miss:#ff7b9c;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--deep);color:var(--paper);font-family:Manrope,system-ui,sans-serif;font-size:16px}
-body{min-height:100vh;min-height:100dvh;
-  background:
-    radial-gradient(120% 60% at 50% -10%, #3b1f7a 0%, transparent 60%),
-    radial-gradient(90% 50% at 100% 100%, #4a1a4d 0%, transparent 60%),
-    var(--deep);}
-.wrap{max-width:480px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 28px)}
-button{font-family:inherit;color:inherit}
-.hide{display:none!important}
-:focus-visible{outline:2px solid var(--holo);outline-offset:3px}
-
-/* ---------- Typo ---------- */
-.display{font-family:Unbounded,sans-serif;font-weight:900;font-size:clamp(40px,13vw,58px);line-height:.92;letter-spacing:-.02em;margin:18px 0 12px}
-.display span{display:block}
-.lead{color:var(--mute);font-size:17px;line-height:1.45;margin:0 0 28px;max-width:30ch}
-h2{font-family:Unbounded,sans-serif;font-weight:700;font-size:15px;margin:22px 0 10px;color:var(--mute)}
-
-/* ---------- Holo-CD ---------- */
-.disc{position:relative;border-radius:50%;aspect-ratio:1;
-  background:
-    radial-gradient(circle, var(--deep) 0 13%, #ffffff55 13.4% 14%, transparent 14.5% 31%, #ffffff22 31.3% 31.8%, transparent 32%),
-    conic-gradient(from 0deg, #c9b8ff, #7ff3e6, #fff2c4, #ffb38a, #f39cff, #9fb6ff, #7ff3e6, #c9b8ff);
-  box-shadow:0 0 0 1px #ffffff30 inset, 0 30px 60px -20px #000a, 0 0 80px -10px #b9a4ff55;}
-.disc::after{content:"";position:absolute;inset:0;border-radius:50%;
-  background:repeating-radial-gradient(circle, #ffffff10 0 1px, transparent 1px 3px);mix-blend-mode:overlay;pointer-events:none}
-.disc .cover{position:absolute;inset:0;border-radius:50%;background-size:cover;background-position:center;opacity:0;transition:opacity .6s;
-  -webkit-mask:radial-gradient(circle, transparent 0 13.5%, #000 14%);mask:radial-gradient(circle, transparent 0 13.5%, #000 14%)}
-.disc.revealed .cover{opacity:1}
-.spin{animation:spin 2.4s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* ---------- Genre ---------- */
-.genre{display:flex;align-items:center;gap:18px;width:100%;text-align:left;border:1px solid var(--line);background:#ffffff08;
-  border-radius:28px;padding:16px 18px 16px 16px;cursor:pointer;margin-bottom:12px;transition:transform .15s,background .15s}
-.genre:active{transform:scale(.98);background:#ffffff12}
-.genre .disc{width:76px;flex:none}
-.genre b{display:block;font-family:Unbounded,sans-serif;font-size:24px;font-weight:700}
-.genre small{color:var(--mute);font-size:14px}
-.soon{color:var(--mute);font-size:14px;padding:6px 4px}
-
-/* ---------- Setup ---------- */
-.back{background:none;border:0;color:var(--mute);font-size:15px;font-weight:600;padding:8px 0;cursor:pointer}
-.chips{display:flex;gap:8px;flex-wrap:wrap}
-.chip{border:1px solid var(--line);background:transparent;padding:11px 16px;border-radius:999px;font-weight:600;font-size:15px;cursor:pointer}
-.chip.on{background:var(--paper);color:var(--night);border-color:var(--paper)}
-.rules{color:var(--mute);font-size:14px;line-height:1.55;margin:24px 0}
-.cta{display:block;width:100%;border:0;border-radius:20px;padding:18px;font-family:Unbounded,sans-serif;font-weight:700;font-size:17px;cursor:pointer;
-  background:linear-gradient(100deg,var(--lilac),var(--holo) 55%,var(--peach));color:var(--night);transition:transform .12s}
-.cta:active{transform:scale(.98)}
-.cta:disabled{opacity:.4}
-.link{display:block;width:100%;background:none;border:0;color:var(--mute);font-weight:600;font-size:15px;padding:14px;cursor:pointer}
-
-/* ---------- Spiel ---------- */
-.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
-.dots{display:flex;gap:4px;flex:1;flex-wrap:wrap}
-.dots i{height:6px;flex:1;max-width:28px;border-radius:3px;background:var(--line)}
-.dots i.ok{background:var(--ok)}.dots i.part{background:var(--part)}.dots i.miss{background:var(--miss)}.dots i.now{background:var(--paper)}
-.score{font-family:Unbounded,sans-serif;font-weight:700;font-size:18px;white-space:nowrap}
-.streak{font-size:13px;color:var(--peach);font-weight:800;min-height:18px;text-align:right}
-
-.stage{position:relative;width:min(74vw,320px);margin:10px auto 6px}
-.stage .ring{position:absolute;inset:-10px;width:calc(100% + 20px);height:calc(100% + 20px);transform:rotate(-90deg)}
-.ring circle{fill:none;stroke-width:3}
-.ring .bg{stroke:#ffffff14}
-.ring .fg{stroke:var(--paper);stroke-linecap:round;transition:stroke-dashoffset .2s linear}
-.playbtn{position:absolute;left:50%;top:50%;width:27%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;border:0;cursor:pointer;
-  background:var(--paper);display:grid;place-items:center;box-shadow:0 6px 24px #0008;z-index:2}
-.playbtn svg{width:40%;fill:var(--night)}
-.status{text-align:center;color:var(--mute);font-size:14px;min-height:20px;margin:6px 0 14px}
-
-.field{display:block;width:100%;background:var(--field);border:1.5px solid transparent;color:var(--paper);border-radius:18px;
-  padding:16px 18px;font:600 17px Manrope,sans-serif;margin-bottom:10px;outline:none;transition:border-color .15s}
-.field::placeholder{color:#8d82b8}
-.field:focus{border-color:var(--lilac)}
-.years{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:4px 0 14px}
-.year{border:1.5px solid var(--line);background:transparent;border-radius:14px;padding:13px 0;font-weight:800;font-size:15px;cursor:pointer;transition:all .15s}
-.year.on{background:var(--paper);color:var(--night);border-color:var(--paper)}
-.year.out{opacity:.18;text-decoration:line-through;pointer-events:none}
-.yearlbl{font-size:14px;color:var(--mute);margin:6px 2px 6px}
-
-.hintrow{display:flex;gap:10px;margin-bottom:12px}
-.hintbtn{flex:none;border:1.5px dashed var(--peach);background:transparent;color:var(--peach);border-radius:18px;padding:0 16px;font-weight:800;font-size:15px;cursor:pointer}
-.hintbtn:disabled{opacity:.35}
-.hintrow .cta{flex:1}
-.hints{margin:0 0 12px;padding:0;list-style:none}
-.hints li{background:#ffb38a14;border-left:3px solid var(--peach);border-radius:4px 14px 14px 4px;padding:10px 14px;margin-bottom:6px;font-size:15px}
-.hints code{font-family:Unbounded,sans-serif;font-size:14px;letter-spacing:.12em;color:var(--peach)}
-
-/* ---------- Auflösung ---------- */
-.answer{text-align:center;margin:4px 0 16px}
-.answer .t{font-family:Unbounded,sans-serif;font-weight:900;font-size:clamp(24px,7vw,32px);line-height:1.1}
-.answer .a{font-size:18px;font-weight:600;margin-top:6px}
-.answer .y{color:var(--mute);margin-top:2px}
-.res{display:grid;gap:6px;margin-bottom:12px}
-.r{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#ffffff08;border-radius:14px;padding:11px 14px;font-size:15px}
-.r small{display:block;color:var(--mute);font-size:13px}
-.p{font-family:Unbounded,sans-serif;font-weight:700;font-size:15px}
-.p.ok{color:var(--ok)}.p.part{color:var(--part)}.p.miss{color:var(--miss)}
-.total{display:flex;justify-content:space-between;font-family:Unbounded,sans-serif;font-weight:700;padding:4px 14px 14px}
-.deezer{display:block;text-align:center;color:var(--mute);font-size:14px;margin:-4px 0 14px}
-.pop{animation:pop .5s cubic-bezier(.2,1.6,.4,1)}
-@keyframes pop{from{transform:scale(.6);opacity:0}}
-
-/* ---------- Ende ---------- */
-.final{text-align:center;margin:20px 0 6px}
-.final .n{font-family:Unbounded,sans-serif;font-weight:900;font-size:88px;line-height:1;
-  background:linear-gradient(100deg,var(--lilac),var(--holo),var(--peach));-webkit-background-clip:text;background-clip:text;color:transparent}
-.final .v{font-size:18px;font-weight:600;margin-top:6px}
-.final .hs{color:var(--mute);font-size:14px;margin-top:4px}
-.summary{margin:22px 0;display:grid;gap:6px}
-.summary div{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:8px 2px;border-bottom:1px solid #ffffff10}
-.summary span:first-child{color:var(--mute)}
-.summary b{color:var(--paper);font-weight:600}
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);transform:translateX(-50%);background:var(--paper);color:var(--night);
-  padding:12px 18px;border-radius:14px;font-weight:700;font-size:14px;z-index:9}
-
-@media (prefers-reduced-motion:reduce){ .spin{animation:none} .pop{animation:none} }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="fx"></canvas>
 <div class="wrap">
 
-<!-- ========== GENRE ========== -->
-<section id="genre">
-  <h1 class="display"><span>Music</span><span>Quiz</span></h1>
-  <p class="lead">30 Sekunden Musik. Erkennst du Titel, Interpret und Jahr?</p>
-  <div id="genreList"></div>
-  <div class="soon">Weitere Genres kommen dazu.</div>
-</section>
-
-<!-- ========== SETUP ========== -->
-<section id="setup" class="hide">
-  <button class="back" data-go="genre">‹ Genres</button>
-  <h1 class="display" id="gName"></h1>
-  <p class="lead" id="gTag"></p>
-  <h2 id="groupLbl">Jahrzehnte</h2>
-  <div class="chips" id="decades"></div>
-  <h2>Songs pro Runde</h2>
-  <div class="chips" id="counts">
-    <button class="chip" data-v="5">5</button><button class="chip on" data-v="10">10</button><button class="chip" data-v="20">20</button>
-  </div>
-  <h2>Hördauer</h2>
-  <div class="chips" id="lengths">
-    <button class="chip" data-v="10">10 Sekunden</button><button class="chip on" data-v="30">30 Sekunden</button>
-  </div>
-  <p class="rules">Titel und Interpret bringen je 2 Punkte, das richtige Jahr 3 (ein Jahr daneben: 1). Jeder Tipp kostet einen Punkt. Ab drei guten Songs in Folge gibt es einen Bonuspunkt pro Song.</p>
-  <button class="cta" id="go">Runde starten</button>
-</section>
-
-<!-- ========== SPIEL ========== -->
-<section id="game" class="hide">
-  <div class="bar"><div class="dots" id="dots"></div><div class="score" id="score">0</div></div>
-  <div class="streak" id="streak"></div>
-
-  <div class="stage">
-    <svg class="ring" viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="48"/><circle class="fg" id="ring" cx="50" cy="50" r="48" stroke-dasharray="301.6" stroke-dashoffset="301.6"/></svg>
-    <div class="disc" id="disc"><div class="cover" id="cover"></div></div>
-    <button class="playbtn" id="play" aria-label="Abspielen"><svg viewBox="0 0 24 24" id="ico"><path d="M8 5v14l11-7z"/></svg></button>
-  </div>
-  <div class="status" id="status"></div>
-
-  <form id="guess" autocomplete="off">
-    <input class="field" id="gTitle" placeholder="Titel" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <input class="field" id="gArtist" placeholder="Interpret" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <div class="yearlbl">Erscheinungsjahr</div>
-    <div class="years" id="years"></div>
-    <ul class="hints" id="hints"></ul>
-    <div class="hintrow">
-      <button type="button" class="hintbtn" id="hint">Tipp −1</button>
-      <button type="submit" class="cta">Auflösen</button>
+<!-- ================= HOME ================= -->
+<section id="home" class="screen">
+  <header class="home-head">
+    <h1 class="logo"><span>Music</span><span>Quiz</span></h1>
+    <div class="head-btns">
+      <button class="iconbtn" data-sheet="board" aria-label="Bestenliste"><svg viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0V4zM7 6H4v1a4 4 0 0 0 4 4M17 6h3v1a4 4 0 0 1-4 4M12 13v3M8 21h8M9.5 16h5l.5 5h-6z"/></svg></button>
+      <button class="iconbtn" data-sheet="settings" aria-label="Einstellungen"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
     </div>
-  </form>
+  </header>
 
-  <div id="reveal" class="hide">
-    <div class="answer pop"><div class="t" id="aT"></div><div class="a" id="aA"></div><div class="y" id="aY"></div></div>
-    <div class="res" id="rows"></div>
-    <a class="deezer hide" id="dz" target="_blank" rel="noopener">Ganzen Song auf Deezer hören</a>
-    <button class="cta" id="next">Nächster Song</button>
+  <button class="daily" id="daily">
+    <div class="disc mini"></div>
+    <div class="daily-txt">
+      <b>Tages-Challenge</b>
+      <span id="dailySub">5 Songs aus allen Genres. Nur der erste Versuch zählt.</span>
+    </div>
+    <div class="daily-go" id="dailyGo">Los</div>
+  </button>
+
+  <h2 class="sec">Spielmodus</h2>
+  <div class="modes" id="modes"></div>
+  <p class="mode-desc" id="modeDesc"></p>
+
+  <h2 class="sec">Genre</h2>
+  <div class="genres" id="genreList"></div>
+</section>
+
+<!-- ================= GAME ================= -->
+<section id="game" class="screen hide">
+  <div class="topbar">
+    <button class="iconbtn sm" id="quit" aria-label="Runde beenden"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="dots" id="dots"></div>
+    <div class="score" id="score">0</div>
+  </div>
+  <div class="subbar">
+    <span class="pill hide" id="playerChip"></span>
+    <span class="pill hide" id="lives"></span>
+    <span class="streak" id="streak"></span>
+  </div>
+  <div class="blitz hide" id="blitzBar"><div id="blitzFill"></div></div>
+
+  <div class="game-grid">
+    <div class="stage-col">
+      <div class="stage" id="stage">
+        <svg class="ring" viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="48"/><circle class="lim" id="ringLim" cx="50" cy="50" r="48"/><circle class="fg" id="ring" cx="50" cy="50" r="48"/></svg>
+        <div class="disc big" id="disc"><div class="cover" id="coverWrap"><i id="cover"></i></div><div class="shine"></div></div>
+        <button class="playbtn" id="play" aria-label="Abspielen"><svg viewBox="0 0 24 24" id="ico"><path d="M8 5v14l11-7z"/></svg></button>
+      </div>
+      <div class="time"><span id="tNow">0:00</span> / <span id="tMax">0:30</span></div>
+      <div class="status" id="status"></div>
+      <button class="more hide" id="more">Länger hören <em>−1</em></button>
+    </div>
+
+    <div class="form-col">
+      <form id="guess" autocomplete="off">
+        <label class="fld"><span>Titel</span><input id="gTitle" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next"></label>
+        <label class="fld"><span>Interpret</span><input id="gArtist" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done"></label>
+        <div class="yearlbl">Erscheinungsjahr</div>
+        <div class="years" id="years"></div>
+        <div class="usedhints" id="usedHints"></div>
+        <div class="actions">
+          <button type="button" class="hintbtn" id="hintBtn"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span>Tipp</span></button>
+          <button type="submit" class="cta">Auflösen</button>
+        </div>
+      </form>
+
+      <div id="reveal" class="hide">
+        <div class="answer"><div class="a-t" id="aT"></div><div class="a-a" id="aA"></div><div class="a-y" id="aY"></div></div>
+        <div class="res" id="rows"></div>
+        <a class="deezer hide" id="dz" target="_blank" rel="noopener">Ganzen Song auf Deezer hören</a>
+        <button class="cta" id="next">Nächster Song</button>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- ========== ENDE ========== -->
-<section id="end" class="hide">
-  <div class="final"><div class="n pop" id="fN"></div><div class="v" id="fV"></div><div class="hs" id="fH"></div></div>
+<!-- ================= END ================= -->
+<section id="end" class="screen hide">
+  <div class="final">
+    <div class="f-n" id="fN">0</div>
+    <div class="f-v" id="fV"></div>
+    <div class="f-h" id="fH"></div>
+  </div>
+  <div class="podium hide" id="podium"></div>
   <div class="summary" id="summary"></div>
-  <button class="cta" id="again">Noch eine Runde</button>
-  <button class="link" id="share">Ergebnis teilen</button>
-  <button class="link" data-go="genre">Genre wechseln</button>
+  <div class="end-actions">
+    <button class="cta" id="again">Noch eine Runde</button>
+    <button class="ghost" id="share">Ergebnis teilen</button>
+    <button class="ghost" id="toHome">Zur Startseite</button>
+  </div>
 </section>
-
 </div>
 
-<!-- Genres: für ein neues Genre eine Datei in genres/ anlegen und hier einbinden -->
+<!-- ================= SHEETS ================= -->
+<div class="scrim" id="scrim"></div>
+
+<div class="sheet" id="sheet-setup" role="dialog" aria-modal="true" aria-labelledby="setupName">
+  <div class="grab"></div>
+  <div class="sheet-head"><div class="disc mini" id="setupDisc"></div><div><h3 id="setupName"></h3><p id="setupTag"></p></div></div>
+  <div id="setupFilterWrap"><h4 id="setupFilterLbl">Jahrzehnte</h4><div class="chips" id="setupFilter"></div></div>
+  <div id="partyWrap" class="hide">
+    <h4>Spieler</h4>
+    <div id="players"></div>
+    <button class="ghost sm" id="addPlayer">Spieler hinzufügen</button>
+  </div>
+  <button class="setup-summary" id="setupSummary" data-sheet="settings"></button>
+  <button class="cta" id="start">Runde starten</button>
+</div>
+
+<div class="sheet" id="sheet-hints" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3>Tipp nehmen</h3>
+  <p class="sheet-sub">Jeder Tipp kostet bei diesem Song einen Punkt.</p>
+  <div class="hintgrid" id="hintGrid"></div>
+</div>
+
+<div class="sheet" id="sheet-settings" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3>Einstellungen</h3>
+  <div class="setlist" id="setList"></div>
+  <button class="ghost danger" id="resetBoard">Bestenliste löschen</button>
+</div>
+
+<div class="sheet" id="sheet-board" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3>Bestenliste</h3>
+  <p class="sheet-sub">Gespeichert auf diesem Gerät.</p>
+  <div class="chips scroll" id="boardFilter"></div>
+  <ol class="board" id="board"></ol>
+</div>
+
+<div class="sheet" id="sheet-confirm" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <h3 id="confirmTitle"></h3>
+  <p class="sheet-sub" id="confirmText"></p>
+  <div class="confirm-row"><button class="ghost" id="confirmNo">Abbrechen</button><button class="cta" id="confirmYes"></button></div>
+</div>
+
+<div class="handoff hide" id="handoff">
+  <div class="disc big spin-slow"></div>
+  <p>Gib das Gerät an</p>
+  <h2 id="handName"></h2>
+  <button class="cta" id="handGo">Bin bereit</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Genres: neue Datei in genres/ anlegen und hier einbinden -->
 <script src="genres/trance.js"></script>
 <script src="genres/charts.js"></script>
-<script>
-const $=s=>document.querySelector(s);
-const SECTIONS=["genre","setup","game","end"];
-const show=id=>{SECTIONS.forEach(x=>$("#"+x).classList.toggle("hide",x!==id));window.scrollTo(0,0);};
-document.addEventListener("click",e=>{const b=e.target.closest("[data-go]");if(b){stop();show(b.dataset.go);}});
-const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;};
-const esc=x=>String(x??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function toast(t){const d=document.createElement("div");d.className="toast";d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2200);}
-const store={get(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
-
-/* ================= Großzügiger Textvergleich ================= */
-function norm(s){
-  return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
-    .replace(/ß/g,"ss").replace(/&|\+/g," and ").replace(/'/g,"")
-    .replace(/[^a-z0-9]+/g," ").replace(/\b(the|dj|feat|ft|featuring|pres|presents)\b/g," ")
-    .replace(/\s+/g," ").trim();
-}
-function lev(a,b){
-  const m=a.length,n=b.length;if(!m)return n;if(!n)return m;
-  let p=Array.from({length:n+1},(_,i)=>i);
-  for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c;}
-  return p[n];
-}
-const tol=len=>len<=3?0:len<=5?1:len<=8?2:3;
-function similar(g,a){ // zwei normalisierte Strings
-  if(!g||!a)return false;
-  if(g===a)return true;
-  const gc=g.replace(/ /g,""),ac=a.replace(/ /g,"");
-  if(gc===ac)return true;
-  if(1-lev(gc,ac)/Math.max(gc.length,ac.length)>=.7)return true;
-  if(gc.length>=4&&ac.includes(gc)&&gc.length/ac.length>=.4)return true;        // "9pm" in "9pmtillicome"
-  if(ac.length>=3&&gc.includes(ac))return true;                                   // mehr getippt als nötig
-  // Wort für Wort: die Hälfte der wichtigen Wörter reicht
-  const at=a.split(" ").filter(w=>w.length>1||/\d/.test(w)), gt=g.split(" ");
-  if(!at.length)return false;
-  const hit=at.filter(w=>gt.some(x=>x===w||(w.length>3&&lev(x,w)<=tol(w.length))));
-  if(hit.length/at.length>=.5&&hit.some(w=>w.length>=3))return true;
-  return hit.some(w=>w.length>=5)||(hit.length/at.length>=.34&&hit.some(w=>w.length>=4)); // "adagio", "armin"
-}
-function variants(answer,isArtist){
-  const v=new Set([answer,answer.replace(/\(.*?\)/g,""),answer.replace(/[()]/g," ")]);
-  (answer.match(/\((.*?)\)/g)||[]).forEach(x=>v.add(x.slice(1,-1)));
-  if(isArtist) answer.split(/\s*(?:&|\band\b|\bvs\.?|\bfeat\.?|\bft\.?|,|\bpres\.?|\bwith\b)\s*/i).forEach(x=>x&&v.add(x));
-  return [...v].map(norm).filter(Boolean);
-}
-const matches=(guess,answer,isArtist)=>{const g=norm(guess);return !!g&&variants(answer,isArtist).some(a=>similar(g,a));};
-
-/* ================= Deezer (JSONP, kein Account nötig) ================= */
-let cbId=0;
-function jsonp(url){
-  return new Promise((res,rej)=>{
-    const name="__dz"+(cbId++),s=document.createElement("script");
-    const t=setTimeout(()=>{done();rej(new Error("timeout"));},9000);
-    function done(){clearTimeout(t);delete window[name];s.remove();}
-    window[name]=d=>{done();res(d);};
-    s.onerror=()=>{done();rej(new Error("network"));};
-    s.src=url+"&output=jsonp&callback="+name;
-    document.head.appendChild(s);
-  });
-}
-const cache=new Map();
-async function lookup(song){
-  const key=song[0]+"|"+song[1];
-  if(cache.has(key))return cache.get(key);
-  const p=(async()=>{
-    const title=song[1].replace(/\(.*?\)/g,"").trim(), artist=song[0].replace(/^DJ\s+/i,"");
-    for(const q of [`artist:"${artist}" track:"${title}"`,`${artist} ${title}`]){
-      try{
-        const d=await jsonp("https://api.deezer.com/search?limit=15&q="+encodeURIComponent(q));
-        const list=(d&&d.data||[]).filter(x=>x.preview);
-        const f=list.find(x=>matches(x.title_short||x.title,title)&&matches(x.artist.name,artist,true))||list.find(x=>matches(x.title_short||x.title,title));
-        if(f)return{preview:f.preview,cover:f.album&&(f.album.cover_big||f.album.cover_medium),link:f.link};
-      }catch(e){}
-    }
-    return null;
-  })();
-  cache.set(key,p);
-  return p;
-}
-
-/* ================= Zustand ================= */
-const audio=new Audio();audio.preload="auto";
-let G=null,pool=[],round=[],idx=0,score=0,streak=0,results=[],listenSec=30,playing=false;
-let cur=null,yearPick=null,yearOpts=[],hintsUsed=0;
-const RING=301.6;
-
-function setIcon(p){$("#ico").innerHTML=p?'<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';}
-function stop(){audio.pause();playing=false;setIcon(false);$("#disc").classList.remove("spin");}
-(function tick(){
-  if(playing){
-    const f=Math.min(1,audio.currentTime/listenSec);
-    $("#ring").style.strokeDashoffset=RING*(1-f);
-    if(audio.currentTime>=listenSec)stop();
-  }
-  requestAnimationFrame(tick);
-})();
-audio.onended=stop;
-
-$("#play").onclick=()=>{
-  if(playing){stop();return;}
-  if(!audio.src){$("#status").textContent="Song wird noch gesucht …";return;}
-  if(audio.currentTime>=listenSec||audio.ended)audio.currentTime=0;
-  const pr=audio.play();
-  playing=true;setIcon(true);$("#disc").classList.add("spin");$("#status").textContent="";
-  if(pr&&pr.catch)pr.catch(()=>{stop();$("#status").textContent="Abspielen blockiert – tippe nochmal auf Play.";});
-};
-
-/* ================= Jahr-Auswahl ================= */
-function makeYears(years){
-  const correct=years[Math.random()*years.length|0], max=new Date().getFullYear();
-  const near=[-2,-1,1,2].map(d=>correct+d).filter(y=>!years.includes(y)&&y<=max);
-  const far=[];for(let d=-7;d<=7;d++){const y=correct+d;if(Math.abs(d)>2&&!years.includes(y)&&y<=max&&y>=1975)far.push(y);}
-  const opts=new Set([correct]);
-  shuffle(near).slice(0,2).forEach(y=>opts.add(y));
-  shuffle(far).forEach(y=>{if(opts.size<5)opts.add(y);});
-  return [...opts].sort((a,b)=>a-b);
-}
-function renderYears(){
-  $("#years").innerHTML=yearOpts.map(y=>`<button type="button" class="year${y===yearPick?" on":""}${struck.includes(y)?" out":""}" data-y="${y}">${y}</button>`).join("");
-}
-let struck=[];
-$("#years").onclick=e=>{const b=e.target.closest(".year");if(!b)return;const y=+b.dataset.y;yearPick=yearPick===y?null:y;renderYears();};
-
-/* ================= Tipps ================= */
-const mask=s=>s.replace(/\(.*?\)/g,"").trim().split(" ").map(w=>w.replace(/^([^A-Za-z0-9ÄÖÜäöüß]*)(.)(.*)$/,(m,p,f,r)=>p+f+r.replace(/[A-Za-z0-9ÄÖÜäöüßéë]/g,"_"))).join("  ");
-function hintList(){
-  const [artist,title,years]=round[idx].song;
-  return [
-    ()=>`Interpret: <code>${esc(mask(artist))}</code>`,
-    ()=>`Titel: <code>${esc(mask(title))}</code>`,
-    ()=>{const wrong=shuffle(yearOpts.filter(y=>!years.includes(y)&&y!==yearPick)).slice(0,2);struck=wrong;renderYears();
-         return `Zwei falsche Jahre sind gestrichen.`;}
-  ];
-}
-$("#hint").onclick=()=>{
-  const list=hintList();
-  if(hintsUsed>=list.length)return;
-  const li=document.createElement("li");li.innerHTML=list[hintsUsed]();li.className="pop";
-  $("#hints").appendChild(li);hintsUsed++;
-  $("#hint").disabled=hintsUsed>=list.length;
-  $("#hint").textContent=hintsUsed>=list.length?"Keine Tipps mehr":"Tipp −1";
-};
-
-/* ================= Ablauf ================= */
-function renderDots(){
-  $("#dots").innerHTML=round.map((r,i)=>`<i class="${i<results.length?results[i].cls:i===idx?"now":""}"></i>`).join("");
-  $("#score").textContent=score;
-  $("#streak").textContent=streak>=2?`${streak} gute Songs in Folge${streak>=3?" · +1 Bonus":""}`:"";
-}
-async function loadSong(){
-  stop();audio.removeAttribute("src");audio.load();
-  $("#ring").style.strokeDashoffset=RING;
-  $("#disc").classList.remove("revealed");$("#cover").style.backgroundImage="";
-  $("#guess").classList.remove("hide");$("#reveal").classList.add("hide");
-  $("#gTitle").value="";$("#gArtist").value="";$("#hints").innerHTML="";
-  hintsUsed=0;struck=[];yearPick=null;$("#hint").disabled=false;$("#hint").textContent="Tipp −1";
-  renderDots();
-  $("#status").textContent="Song wird gesucht …";
-  let found=null;
-  while(!found&&idx<round.length){
-    found=await lookup(round[idx].song);
-    if(!found){const spare=pool.shift();if(spare)round[idx]={song:spare};else round.splice(idx,1);}
-  }
-  if(!found){$("#status").textContent="Deezer ist gerade nicht erreichbar. Prüfe deine Internetverbindung und lade die Seite neu.";return;}
-  round[idx].dz=found;
-  yearOpts=makeYears(round[idx].song[2]);renderYears();renderDots();
-  audio.src=found.preview;
-  $("#status").textContent="Tippe auf die CD";
-  if(round[idx+1])lookup(round[idx+1].song);
-}
-
-$("#guess").onsubmit=e=>{
-  e.preventDefault();stop();
-  document.activeElement&&document.activeElement.blur();
-  const r=round[idx],[artist,title,years]=r.song;
-  const gt=$("#gTitle").value.trim(),ga=$("#gArtist").value.trim();
-  const tOk=matches(gt,title),aOk=matches(ga,artist,true);
-  let yP=0;if(yearPick!=null){const d=Math.min(...years.map(y=>Math.abs(y-yearPick)));yP=d===0?3:d===1?1:0;}
-  const raw=(tOk?2:0)+(aOk?2:0)+yP;
-  let pts=Math.max(0,raw-hintsUsed);
-  streak=pts>=4?streak+1:0;
-  const bonus=streak>=3?1:0;pts+=bonus;
-  score+=pts;
-  const cls=raw>=6&&hintsUsed===0?"ok":pts>0?"part":"miss";
-  results.push({song:r.song,pts,cls});
-
-  $("#aT").textContent=title;$("#aA").textContent=artist;$("#aY").textContent=years.join(" / ");
-  const row=(k,you,p,max)=>`<div class="r"><div>${k}<small>${you?esc(you):"keine Angabe"}</small></div><div class="p ${p===max?"ok":p>0?"part":"miss"}">+${p}</div></div>`;
-  let html=row("Titel",gt,tOk?2:0,2)+row("Interpret",ga,aOk?2:0,2)+row("Jahr",yearPick,yP,3);
-  if(hintsUsed&&raw)html+=`<div class="r"><div>${hintsUsed} ${hintsUsed>1?"Tipps":"Tipp"}</div><div class="p miss">−${Math.min(hintsUsed,raw)}</div></div>`;
-  if(bonus)html+=`<div class="r"><div>Serien-Bonus</div><div class="p ok">+1</div></div>`;
-  html+=`<div class="total"><span>Dieser Song</span><span>+${pts}</span></div>`;
-  $("#rows").innerHTML=html;
-  if(r.dz&&r.dz.cover){$("#cover").style.backgroundImage=`url("${r.dz.cover}")`;$("#disc").classList.add("revealed");}
-  const dz=$("#dz");if(r.dz&&r.dz.link){dz.href=r.dz.link;dz.classList.remove("hide");}else dz.classList.add("hide");
-  $("#status").textContent="";
-  $("#guess").classList.add("hide");$("#reveal").classList.remove("hide");
-  $("#next").textContent=idx+1>=round.length?"Zum Ergebnis":"Nächster Song";
-  renderDots();
-  $(".stage").scrollIntoView({behavior:"smooth",block:"start"});
-};
-$("#next").onclick=()=>{idx++;if(idx>=round.length)finish();else{loadSong();window.scrollTo(0,0);}};
-
-function finish(){
-  stop();show("end");
-  const max=round.length*7,pct=score/max;
-  $("#fN").textContent=score;
-  $("#fV").textContent=pct>=.8?"Du warst bei jeder Love Parade dabei.":pct>=.55?"Starke Runde – die Hymnen sitzen.":pct>=.3?"Solide. Ein paar Klassiker fehlen noch.":"Da ist noch Luft nach oben – nochmal?";
-  const key="mq-best-"+G.id,best=store.get(key)||0;
-  if(score>best){store.set(key,score);$("#fH").textContent=best?`Neuer Rekord! Vorher: ${best}`:"Dein erster Rekord.";}
-  else $("#fH").textContent=`Dein Rekord: ${best}`;
-  $("#summary").innerHTML=results.map(r=>`<div><span><b>${esc(r.song[1])}</b> · ${esc(r.song[0])}</span><span class="p ${r.cls}">+${r.pts}</span></div>`).join("");
-}
-$("#share").onclick=async()=>{
-  const em=results.map(r=>r.cls==="ok"?"🟩":r.cls==="part"?"🟨":"🟥").join("");
-  const text=`Music Quiz · ${G.name}\n${em}\n${score} Punkte`;
-  try{if(navigator.share){await navigator.share({text,url:location.href});return;}}catch(e){return;}
-  try{await navigator.clipboard.writeText(text+"\n"+location.href);toast("Ergebnis kopiert");}catch(e){toast("Teilen nicht möglich");}
-};
-
-/* ================= Genre & Setup ================= */
-function chipGroup(id,multi){
-  $(id).addEventListener("click",e=>{
-    const b=e.target.closest(".chip");if(!b)return;
-    if(multi)b.classList.toggle("on");else{[...$(id).children].forEach(c=>c.classList.remove("on"));b.classList.add("on");}
-    $("#go").disabled=!$("#decades .on");
-  });
-}
-chipGroup("#decades",true);chipGroup("#counts",false);chipGroup("#lengths",false);
-
-const groupOf=s=>G&&G.groupBy==="year"?s[2][s[2].length-1]:Math.floor(s[2][0]/10)*10;
-function pickGenre(g){
-  G=g;
-  $("#gName").textContent=g.name;$("#gTag").textContent=g.tagline;
-  const groups=[...new Set(g.songs.map(groupOf))].sort();
-  $("#groupLbl").textContent=g.groupBy==="year"?"Jahre":"Jahrzehnte";
-  $("#decades").innerHTML=groups.map(d=>`<button class="chip on" data-v="${d}">${g.groupBy==="year"?d:(d<2000?String(d).slice(2):d)+"er"}</button>`).join("");
-  $("#go").disabled=false;
-  show("setup");
-}
-function startGame(){
-  const decs=[...document.querySelectorAll("#decades .on")].map(b=>+b.dataset.v);
-  const n=+$("#counts .on").dataset.v;listenSec=+$("#lengths .on").dataset.v;
-  pool=shuffle(G.songs.filter(s=>decs.includes(groupOf(s))));
-  round=pool.splice(0,Math.min(n,pool.length)).map(s=>({song:s}));
-  idx=0;score=0;streak=0;results=[];
-  show("game");loadSong();
-}
-$("#go").onclick=startGame;
-$("#again").onclick=startGame;
-
-$("#genreList").innerHTML=(window.GENRES||[]).map((g,i)=>{
-  const best=store.get("mq-best-"+g.id);
-  return `<button class="genre" data-i="${i}"><div class="disc"></div><div><b>${esc(g.name)}</b><small>${esc(g.tagline)}<br>${g.songs.length} Songs${best?` · Rekord ${best}`:""}</small></div></button>`;
-}).join("");
-$("#genreList").onclick=e=>{const b=e.target.closest(".genre");if(b)pickGenre(GENRES[+b.dataset.i]);};
-</script>
+<script src="genres/achtziger.js"></script>
+<script src="genres/eurodance.js"></script>
+<script src="genres/nullerjahre.js"></script>
+<script src="genres/deutschrap.js"></script>
+<script src="genres/rock.js"></script>
+<script src="genres/schlager.js"></script>
+<script src="genres/kids.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

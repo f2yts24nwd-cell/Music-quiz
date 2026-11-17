@@ -1,0 +1,37 @@
+window.GENRES = window.GENRES || [];
+GENRES.push({
+  id: "rock",
+  name: "Rock-Klassiker",
+  tagline: "Luftgitarre ausdrücklich erlaubt",
+  colors: ["#ff7a3d", "#c9d4ff"],
+  songs: [
+    ["The Rolling Stones", "(I Can't Get No) Satisfaction", [1965]],
+    ["Led Zeppelin", "Stairway to Heaven", [1971]],
+    ["Deep Purple", "Smoke on the Water", [1972, 1973]],
+    ["Lynyrd Skynyrd", "Sweet Home Alabama", [1974]],
+    ["Queen", "Bohemian Rhapsody", [1975]],
+    ["Eagles", "Hotel California", [1976, 1977]],
+    ["Status Quo", "Rockin' All Over the World", [1977]],
+    ["Dire Straits", "Sultans of Swing", [1978, 1979]],
+    ["AC/DC", "Highway to Hell", [1979]],
+    ["Kiss", "I Was Made for Lovin' You", [1979]],
+    ["Pink Floyd", "Another Brick in the Wall", [1979]],
+    ["Joan Jett & the Blackhearts", "I Love Rock 'n' Roll", [1981, 1982]],
+    ["Bryan Adams", "Summer of '69", [1984, 1985]],
+    ["Guns N' Roses", "Sweet Child o' Mine", [1987, 1988]],
+    ["AC/DC", "Thunderstruck", [1990]],
+    ["Scorpions", "Wind of Change", [1990, 1991]],
+    ["Nirvana", "Smells Like Teen Spirit", [1991]],
+    ["Metallica", "Enter Sandman", [1991]],
+    ["Die Ärzte", "Schrei nach Liebe", [1993]],
+    ["Oasis", "Wonderwall", [1995]],
+    ["Rammstein", "Du hast", [1997]],
+    ["The Offspring", "Pretty Fly (for a White Guy)", [1998]],
+    ["Red Hot Chili Peppers", "Californication", [1999, 2000]],
+    ["Bon Jovi", "It's My Life", [2000]],
+    ["Linkin Park", "Numb", [2003]],
+    ["The White Stripes", "Seven Nation Army", [2003]],
+    ["Green Day", "Boulevard of Broken Dreams", [2004]],
+    ["Die Toten Hosen", "Tage wie diese", [2012]]
+  ]
+});
