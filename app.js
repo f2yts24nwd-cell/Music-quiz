@@ -604,5 +604,24 @@ function renderBoard() {
 }
 $("#boardFilter").onclick = e => { const b = e.target.closest(".chip"); if (b) { boardMode = b.dataset.b; renderBoard(); } };
 
+/* ============================ Updates ============================ */
+// Home-Bildschirm-Apps auf iOS halten alte Dateien fest. Beim Start und beim Zurückkehren
+// in die App wird version.json ohne Cache geladen; ist eine neue Version da, lädt die App neu.
+let updating = false;
+async function checkUpdate() {
+  if (updating || location.protocol === "file:") return;
+  try {
+    const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+    const { v } = await r.json();
+    if (v && v !== window.APP_V && !(R && $("#game").offsetParent)) {
+      updating = true; toast("Neue Version wird geladen …");
+      setTimeout(() => location.replace(location.pathname + "?v=" + encodeURIComponent(v)), 700);
+    }
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+$("#ver").textContent = window.APP_V || "–";
+
 /* ============================ Start ============================ */
 renderHome();
+checkUpdate();

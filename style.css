@@ -280,3 +280,5 @@ html.ipad .stage{width:min(38vw,26rem)}
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
+
+.ver{text-align:center;color:var(--mute2);font-size:.78rem;margin:1rem 0 0}
