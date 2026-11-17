@@ -112,6 +112,7 @@ async function loadExtra(g) {
   return (g._extra = out);
 }
 // Erscheinungsjahr: früheste Veröffentlichung über alle passenden Alben (Sampler & Remaster zählen nicht)
+if (!store.get("mq-years-v2", false)) { store.set("mq-years", {}); store.set("mq-years-v2", true); } // alte Jahre evtl. aus falschen Treffern
 const yearCache = store.get("mq-years", {});
 async function resolveYear(song) {
   const k = songKey(song[0], song[1]);
@@ -120,7 +121,7 @@ async function resolveYear(song) {
   if (song[3] && song[3].albumId) ids.add(song[3].albumId);
   try {
     const d = await jsonp("search?limit=25&q=" + encodeURIComponent(`artist:"${song[0]}" track:"${cleanTitle(song[1])}"`));
-    (d.data || []).filter(x => matches(x.title_short || x.title, cleanTitle(song[1]), false, "normal") && matches(x.artist.name, song[0], true, "locker"))
+    (d.data || []).filter(x => songScore(x, song[1], song[0]) >= 4)
       .forEach(x => x.album && ids.add(x.album.id));
   } catch (e) {}
   const al = await Promise.allSettled([...ids].slice(0, 8).map(id => jsonp("album/" + id)));
@@ -208,7 +209,7 @@ const dzOf = f => ({ id: f.id, t: Date.now(), preview: f.preview, cover: f.album
 // Deezer-Vorschau-Links sind nur ca. 15 Minuten gültig: nie alte Links verwenden.
 const FRESH = 8 * 60 * 1000;
 async function freshById(dz) {
-  try { const t = await jsonp("track/" + dz.id); if (t && t.preview) return Object.assign({}, dz, dzOf(t), { cover: dz.cover || dzOf(t).cover }); } catch (e) {}
+  try { const t = await jsonp("track/" + dz.id); if (t && t.preview && t.id === dz.id) return Object.assign({}, dz, dzOf(t), { cover: dz.cover || dzOf(t).cover }); } catch (e) {}
   return null;
 }
 function lookup(song, force) {
@@ -220,21 +221,36 @@ function lookup(song, force) {
   cache.set(key, { t: Date.now(), p });
   return p;
 }
+// Song bei Deezer finden – streng, damit wirklich genau dieser Song läuft
+// (unabhängig davon, wie locker deine Antworten gewertet werden).
+const VERSIONISH = /\b(karaoke|instrumental|tribute|cover|made famous|in the style|8-bit|lullaby|piano version|acoustic|live)\b/i;
+function songScore(x, title, artist) {
+  if (!x || !x.preview || !x.artist) return -1;
+  const full = (x.title || "") + " " + ((x.album && x.album.title) || "") + " " + x.artist.name;
+  if (VERSIONISH.test(full) && !VERSIONISH.test(title)) return -1;
+  const tn = norm(cleanTitle(x.title_short || x.title)), wn = norm(cleanTitle(title));
+  if (!tn || !wn) return -1;
+  const tr = 1 - lev(tn.replace(/ /g, ""), wn.replace(/ /g, "")) / Math.max(tn.length, wn.length);
+  const tScore = tn === wn ? 3 : tr >= .88 ? 2 : -9;
+  const an = norm(x.artist.name), parts = variants(artist, true);
+  const aScore = parts.includes(an) ? 3 : matches(x.artist.name, artist, true, "normal") || parts.some(p => p.length >= 4 && an.includes(p)) ? 2 : -9;
+  if (tScore < 0 || aScore < 0) return -1;
+  const remix = /\b(remix|mix|edit|version|rework|bootleg|vip)\b/i.test(x.title || "") && !/\b(remix|mix|edit|version)\b/i.test(title) ? 1 : 0;
+  return tScore + aScore - remix;
+}
 function searchDz(song) {
-  const p = (async () => {
-    const title = song[1].replace(/\(.*?\)/g, "").trim(), artist = song[0].replace(/^DJ\s+/i, "").replace(/-Cast$/i, "");
-    for (const q of [`artist:"${artist}" track:"${title}"`, `${artist} ${title}`, title]) {
+  return (async () => {
+    const title = cleanTitle(song[1]).replace(/\(.*?\)/g, "").trim() || song[1], artist = song[0].replace(/^DJ\s+/i, "").replace(/-Cast$/i, "");
+    let best = null, bestS = -1;
+    for (const q of [`artist:"${artist}" track:"${title}"`, `${artist} ${title}`]) {
       try {
-        const d = await jsonp("search?limit=20&q=" + encodeURIComponent(q));
-        const list = (d && d.data || []).filter(x => x.preview);
-        const f = list.find(x => matches(x.title_short || x.title, title, false, "locker") && matches(x.artist.name, artist, true, "locker"))
-          || (q !== title && list.find(x => matches(x.title_short || x.title, title, false, "normal")));
-        if (f) return dzOf(f);
+        const d = await jsonp("search?limit=25&q=" + encodeURIComponent(q));
+        (d && d.data || []).forEach(x => { const s = songScore(x, song[1], song[0]); if (s > bestS || (s === bestS && s > 0 && (x.rank || 0) > ((best && best.rank) || 0))) { best = x; bestS = s; } });
+        if (bestS >= 6) break;
       } catch (e) {}
     }
-    return null;
+    return bestS >= 4 ? dzOf(best) : null;
   })();
-  return p;
 }
 async function loadLiveCharts() {
   const g = GENRES.find(x => x.live);
@@ -590,7 +606,7 @@ const deck = {
       if (dead) return "fail"; // Link abgelaufen
       WAVE = fakeWave(url);
       this.mode = "el"; audio.src = url; try { audio.load(); } catch (e2) {}
-      const err = await new Promise(res => { const t = setTimeout(() => res(false), 1500); audio.addEventListener("error", () => { clearTimeout(t); res(true); }, { once: true }); });
+      const err = await new Promise(res => { const t = setTimeout(() => res(false), 1500); const on = () => { if (audio.src !== url) return; audio.removeEventListener("error", on); clearTimeout(t); res(true); }; audio.addEventListener("error", on); });
       if (my !== loadToken) return false;
       if (err) return "fail";
     }
