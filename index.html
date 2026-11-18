@@ -2,6 +2,8 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://api.deezer.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: data: blob:; connect-src 'self' https:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Music Quiz</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10,12 +12,9 @@
 <meta name="apple-mobile-web-app-title" content="Music Quiz">
 <meta name="theme-color" content="#110a24">
 <link rel="apple-touch-icon" href="icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Manrope:wght@400;500;600;700;800&family=Audiowide&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts/fonts.css">
 <meta http-equiv="Cache-Control" content="no-cache">
-<script>window.APP_V="2026.11.17-18";</script>
-<link rel="stylesheet" href="style.css?v=2026.11.17-18">
+<link rel="stylesheet" href="style.css?v=2026.11.18-1">
 </head>
 <body>
 <div class="bgfx" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -216,15 +215,15 @@
 <div class="toast" id="toast"></div>
 
 <!-- Genres: neue Datei in genres/ anlegen und hier einbinden -->
-<script src="genres/trance.js?v=2026.11.17-18"></script>
-<script src="genres/charts.js?v=2026.11.17-18"></script>
-<script src="genres/achtziger.js?v=2026.11.17-18"></script>
-<script src="genres/eurodance.js?v=2026.11.17-18"></script>
-<script src="genres/nullerjahre.js?v=2026.11.17-18"></script>
-<script src="genres/deutschrap.js?v=2026.11.17-18"></script>
-<script src="genres/rock.js?v=2026.11.17-18"></script>
-<script src="genres/schlager.js?v=2026.11.17-18"></script>
-<script src="genres/kids.js?v=2026.11.17-18"></script>
-<script src="app.js?v=2026.11.17-18"></script>
+<script src="genres/trance.js?v=2026.11.18-1"></script>
+<script src="genres/charts.js?v=2026.11.18-1"></script>
+<script src="genres/achtziger.js?v=2026.11.18-1"></script>
+<script src="genres/eurodance.js?v=2026.11.18-1"></script>
+<script src="genres/nullerjahre.js?v=2026.11.18-1"></script>
+<script src="genres/deutschrap.js?v=2026.11.18-1"></script>
+<script src="genres/rock.js?v=2026.11.18-1"></script>
+<script src="genres/schlager.js?v=2026.11.18-1"></script>
+<script src="genres/kids.js?v=2026.11.18-1"></script>
+<script src="app.js?v=2026.11.18-1"></script>
 </body>
 </html>

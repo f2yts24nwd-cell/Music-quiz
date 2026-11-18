@@ -2,9 +2,12 @@
    Music Quiz – App-Logik
    ===================================================================== */
 "use strict";
+const APP_V = (/[?&]v=([^&]+)/.exec((document.currentScript && document.currentScript.src) || "") || [])[1] || "";
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = x => String(x ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Nur echte https-Adressen übernehmen (keine javascript:/data:-Links aus Antworten oder Cache)
+const safeUrl = u => { try { return typeof u === "string" && new URL(u).protocol === "https:"; } catch (e) { return false; } };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const fmt = t => { t = Math.max(0, Math.floor(t)); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
 const shuffle = (a, rnd = Math.random) => { for (let i = a.length - 1; i > 0; i--) { const j = rnd() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -417,7 +420,7 @@ $("#sapOpts").onclick = e => {
 };
 async function checkPin() {
   const v = $("#pinIn").value.trim(); if (v.length < 4) return;
-  let ok = false; try { ok = (await sha("mq-" + v)) === PIN_HASH; } catch (e) { ok = v === String(815).padStart(4, "0"); }
+  let ok = false; try { ok = (await sha("mq-" + v)) === PIN_HASH; } catch (e) { ok = false; }
   if (ok) { SFX.good(); startSap(); }
   else { $("#pinErr").textContent = "Falscher PIN"; $("#pinIn").value = ""; SFX.bad(); $("#sheet-pin").classList.remove("shake"); void $("#sheet-pin").offsetWidth; $("#sheet-pin").classList.add("shake"); }
 }
@@ -905,7 +908,7 @@ async function loadSong() {
   const it = R.items[R.idx]; P.dz = dz;
   P.refs = makeRefs(it.song[2]); renderYears();
   if (R.choice) { P.mc = { title: mcOptions(it.song[1], 1, false), artist: mcOptions(it.song[0], 0, true), tPick: null, aPick: null, tStruck: [], aStruck: [] }; renderMC(); }
-  if (dz.cover) $("#cover").style.backgroundImage = `url("${dz.cover}")`;
+  if (safeUrl(dz.cover)) $("#cover").style.backgroundImage = `url("${dz.cover.replace(/["\\\n\r]/g, encodeURIComponent)}")`;
   $("#status").textContent = "Song wird geladen …";
   let ok = await deck.load(dz.preview);
   if (myP !== P) return;
@@ -1282,7 +1285,7 @@ function submit(timeout) {
   html += `<div class="total"><span>${R.mode === "party" ? esc(pl.name) : "Dieser Song"}</span><span>+${pts}</span></div>`;
   $("#rows").innerHTML = html;
   const c = $("#cover"); c.style.filter = "none"; if (P.dz.cover) $("#coverWrap").classList.add("on");
-  const dzl = $("#dz"); if (P.dz.link) { dzl.href = P.dz.link; dzl.classList.remove("hide"); } else dzl.classList.add("hide");
+  const dzl = $("#dz"); if (safeUrl(P.dz.link)) { dzl.href = P.dz.link; dzl.classList.remove("hide"); } else dzl.classList.add("hide");
   $("#guess").classList.add("hide"); $("#reveal").classList.remove("hide");
   $("#status").textContent = "Dreh das Jogwheel, um weiterzuhören."; setRing(deck.time());
   $("#more").classList.add("hide");
@@ -1378,14 +1381,14 @@ async function checkUpdate() {
   try {
     const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
     const { v } = await r.json();
-    if (v && v !== window.APP_V && !(R && $("#game").offsetParent)) {
+    if (v && v !== APP_V && !(R && $("#game").offsetParent)) {
       updating = true; toast("Neue Version wird geladen …");
       setTimeout(() => location.replace(location.pathname + "?v=" + encodeURIComponent(v)), 700);
     }
   } catch (e) {}
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
-$("#ver").textContent = window.APP_V || "–";
+$("#ver").textContent = APP_V || "–";
 
 /* ============================ Design ============================ */
 const THEME_BG = { original: "#110a24", glass: "#0d0b1f", pop: "#ffe94d", retro: "#1a0630" };
