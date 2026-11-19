@@ -28,6 +28,14 @@ const S = Object.assign({}, DEFAULTS, store.get("mq-settings", {}));
 if (!store.get("mq-theme-v2", false)) { S.theme = "glass"; store.set("mq-theme-v2", true); store.set("mq-settings", S); } // Glass einmalig als neuer Standard
 const saveSettings = () => store.set("mq-settings", S);
 
+// Schwierigkeit: setzt mehrere Einstellungen auf einmal, Details unter "Erweitert"
+const PRESETS = {
+  leicht: { label: "Leicht", desc: "Vorschläge statt Eintippen, Cover nach 10 s, großzügige Schreibweise.", v: { listen: 30, cover: 10, hints: true, answer: "choice", strict: "locker", yearLevel: "leicht" } },
+  normal: { label: "Normal", desc: "Eintippen, Cover nach 20 s, Tipps erlaubt.", v: { listen: 30, cover: 20, hints: true, answer: "type", strict: "locker", yearLevel: "normal" } },
+  profi:  { label: "Profi", desc: "20 s Hörzeit, kein Cover, keine Tipps, genaue Schreibweise.", v: { listen: 20, cover: 0, hints: false, answer: "type", strict: "normal", yearLevel: "schwer" } },
+};
+const presetNow = () => Object.keys(PRESETS).find(k => Object.entries(PRESETS[k].v).every(([x, v]) => S[x] === v)) || null;
+const BASIC = ["theme", "name", "count"];
 const SETTINGS = [
   { key: "theme", label: "Design", desc: "Wie die App aussieht. Probier alle durch.", opts: [["original", "Original"], ["glass", "Glass"], ["pop", "Farbrausch"], ["retro", "Retro"]] },
   { key: "name", label: "Dein Name", desc: "Steht in der Bestenliste.", type: "text" },
@@ -46,7 +54,7 @@ const SETTINGS = [
 
 /* ============================ Modi ============================ */
 const MODES = {
-  classic: { name: "Klassisch", icon: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>', desc: "Hören, raten, auflösen. Titel 2, Interpret 2, Jahr 3 Punkte." },
+  classic: { name: "Klassisch", icon: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>', desc: "Hören, raten, auflösen. Titel 2, Interpret 2, Jahr 3 Punkte. Früh erkannt gibt Bonus, Treffer am Stück eine Combo." },
   blitz:   { name: "Blitz", icon: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', desc: "20 Sekunden pro Song, ab dem ersten Ton. Wer schneller auflöst, kassiert bis zu 2 Bonuspunkte." },
   intro:   { name: "Intro-Profi", icon: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>', desc: "Nur 2 Sekunden Musik. Jede Verlängerung kostet einen Punkt – erkennst du es früh, gewinnst du." },
   sudden:  { name: "Sudden Death", icon: '<path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/>', desc: "Endlos-Runde. Sobald du Titel und Interpret verpasst, ist Schluss." },
@@ -147,7 +155,7 @@ function prepare(song, force) {
 function norm(s) {
   return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/ß/g, "ss").replace(/&|\+/g, " and ").replace(/['’`´]/g, "").replace(/!/g, "i").replace(/\$/g, "s")
-    .replace(/[^a-z0-9]+/g, " ").replace(/\b(the|dj|feat|ft|featuring|pres|presents|der|die|das)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ").replace(/\b(the|dj|feat|ft|featuring|pres|presents|der|die|das)\b/g, " ").replace(/\b(und|n)\b/g, " and ")
     .replace(/\s+/g, " ").trim();
 }
 function lev(a, b) {
@@ -187,8 +195,8 @@ function similar(g, a, L) {
   return L.loose && (hit.some(w => w.length >= 4) || (hit.length / at.length >= .34 && hit.some(w => w.length >= 3)));
 }
 function variants(answer, isArtist) {
-  const v = new Set([answer, answer.replace(/\(.*?\)/g, ""), answer.replace(/[()]/g, " ")]);
-  (answer.match(/\((.*?)\)/g) || []).forEach(x => v.add(x.slice(1, -1)));
+  const v = new Set([answer, answer.replace(/[\(\[].*?[\)\]]/g, ""), answer.replace(/[()\[\]]/g, " "), cleanTitle(answer), answer.replace(/\s+[-–]\s+.*$/, "")]);
+  (answer.match(/[\(\[](.*?)[\)\]]/g) || []).forEach(x => v.add(x.slice(1, -1)));
   if (isArtist) answer.split(/\s*(?:&|\band\b|\bx\b|\bvs\.?|\bfeat\.?|\bft\.?|,|\bpres\.?|\bwith\b)\s*/i).forEach(x => x && v.add(x));
   return [...v].map(norm).filter(Boolean);
 }
@@ -361,6 +369,7 @@ function renderHome() {
   $("#daily").classList.toggle("done", !!d);
   $("#dailySub").textContent = d ? `Heute geschafft: ${d.score} Punkte. Morgen gibt es neue Songs.` : "5 Songs aus allen Genres. Nur der erste Versuch zählt.";
   $("#dailyGo").textContent = d ? "Üben" : "Los";
+  $("#dailyShare").classList.toggle("hide", !(d && d.text));
 }
 $("#modes").onclick = e => { const b = e.target.closest(".mode"); if (!b) return; SFX.tap(); mode = b.dataset.m; store.set("mq-mode", mode); renderHome(); };
 $("#genreList").onclick = e => { const b = e.target.closest(".genre"); if (!b) return; SFX.tap(); const g = GENRES[+b.dataset.i]; if (g.locked && !adultOK) askPin(g); else openSetup(g); };
@@ -490,7 +499,8 @@ function renderSetupSummary() {
   const listen = mode === "intro" ? "2 s, verlängerbar" : S.listen + " s";
   const count = mode === "sudden" ? "endlos" : S.count + " Songs";
   const cover = mode === "intro" || !S.cover ? "aus" : "nach " + S.cover + " s";
-  $("#setupSummary").innerHTML = `<b>${MODES[mode].name}</b> · ${count} · Hören ${listen} · Cover ${cover} · Tipps ${S.hints ? "an" : "aus"}<br><span style="color:var(--lilac)">Einstellungen ändern</span>`;
+  const pr = presetNow();
+  $("#setupSummary").innerHTML = `<b>${MODES[mode].name}</b> · ${pr ? PRESETS[pr].label : "Eigene Einstellungen"} · ${count} · Hören ${listen} · Cover ${cover} · Tipps ${S.hints ? "an" : "aus"}<br><span style="color:var(--lilac)">Einstellungen ändern</span>`;
 }
 $("#start").onclick = async () => {
   const g = setupGenre; let songs = g.songs, allowed = null;
@@ -855,7 +865,7 @@ function startRound(o) {
   const n = o.daily ? 5 : o.mode === "sudden" ? pool.length : Math.min(S.count, pool.length);
   const pl = o.mode === "party" ? players.map((p, i) => ({ name: p.trim() || "Spieler " + (i + 1), score: 0 })) : [{ name: S.name.trim() || "Du", score: 0 }];
   R = { genre: o.genre, mode: o.mode, daily: !!o.daily, practice: !!o.practice, items: pool.splice(0, n).map(s => ({ song: s })), pool, idx: 0,
-    players: pl, results: [], streak: 0, over: false, allowed: o.allowed || null, choice: o.mode === "choice" || S.answer === "choice",
+    players: pl, results: [], over: false, allowed: o.allowed || null, choice: o.mode === "choice" || S.answer === "choice",
     listen: o.daily ? 30 : S.listen, cover: o.mode === "intro" ? 0 : (o.daily ? 20 : S.cover), hints: o.daily ? true : S.hints };
   setDiscColors($("#stage"), o.genre);
   $("#score").textContent = "0";
@@ -868,6 +878,7 @@ function startRound(o) {
   show("game");
   loadSong();
 }
+const comboOf = n => n >= 5 ? 2 : n >= 3 ? 1.5 : 1;
 const curPlayer = () => R.players[R.mode === "party" ? R.idx % R.players.length : 0];
 const limit = () => R.mode === "intro" ? INTRO_STAGES[P.stage] : R.listen;
 
@@ -879,7 +890,8 @@ function renderTop() {
   $("#playerChip").textContent = pl.name + " ist dran";
   $("#cdjTrack").textContent = String(R.idx + 1).padStart(2, "0");
   $("#lives").textContent = "♥ Ein Leben";
-  $("#streak").textContent = R.mode !== "party" && R.streak >= 2 ? `${R.streak}er-Serie${R.streak >= 3 ? " · +1 pro Song" : ""}` : "";
+  const st = pl.streak || 0, nx = comboOf(st + 1);
+  $("#streak").textContent = st >= 2 ? `🔥 ${st}er-Combo${nx > 1 ? " · nächster Treffer ×" + String(nx).replace(".", ",") : ""}` : "";
 }
 
 async function loadSong() {
@@ -1277,12 +1289,19 @@ function submit(timeout) {
   if (exact != null) rows.push(["Genaues Jahr (Bonus)", exact, exOk ? 1 : 0, 1]);
   const extra = [];
   if (cost && raw) extra.push([R.mode === "intro" && P.stage ? "Tipps & Verlängerung" : P.hints.length > 1 ? `${P.hints.length} Tipps` : "Tipp", -Math.min(cost, raw)]);
+  // Schnell erkannt: wer früh richtig liegt, bekommt mehr (Blitz und Intro haben eigene Regeln)
+  const heard = P.played;
+  if (R.mode !== "blitz" && R.mode !== "intro" && (tOk || aOk)) { const b = heard <= 5 ? 2 : heard <= 12 ? 1 : 0; if (b) { pts += b; extra.push([`Schnell erkannt (${Math.max(1, Math.round(heard))} s)`, b]); } }
   if (R.mode === "blitz" && !timeout && raw > 0) { const el = (performance.now() - P.blitzStart) / 1000; const b = P.blitzStart ? (el <= 8 ? 2 : el <= 14 ? 1 : 0) : 0; if (b) { pts += b; extra.push([`Blitz-Bonus (${el.toFixed(1)} s)`, b]); } }
-  if (R.mode !== "party") { R.streak = pts >= 4 ? R.streak + 1 : 0; if (R.streak >= 3) { pts += 1; extra.push([`${R.streak}er-Serie`, 1]); } }
+  // Combo: Titel und Interpret mehrmals hintereinander richtig -> Multiplikator
+  pl.streak = tOk && aOk ? (pl.streak || 0) + 1 : 0;
+  const mult = comboOf(pl.streak);
+  if (mult > 1 && pts > 0) { const b = Math.ceil(pts * (mult - 1)); pts += b; extra.push([`${pl.streak}er-Combo ×${String(mult).replace(".", ",")}`, b]); if (pl.streak === 3 || pl.streak === 5) setTimeout(() => toast(`Combo ×${String(mult).replace(".", ",")}!`), 400); }
+  pl.bestStreak = Math.max(pl.bestStreak || 0, pl.streak);
   if (timeout) extra.push(["Zeit abgelaufen", 0]);
   const before = pl.score; pl.score += pts;
   const cls = raw >= 7 && !cost ? "ok" : pts > 0 ? "part" : "miss";
-  R.results.push({ song: it.song, pts, cls, player: pl.name });
+  R.results.push({ song: it.song, pts, cls, player: pl.name, tOk, aOk, yOk: yP > 0, heard: (tOk || aOk) ? heard : null });
   if (R.mode === "sudden" && !tOk && !aOk) R.over = true;
 
   // Anzeige
@@ -1337,31 +1356,56 @@ function finish() {
     const board = store.get("mq-board", []);
     R.players.filter(p => p.score > 0).forEach(p => board.push({ n: p.name, s: p.score, m: R.daily ? "daily" : R.mode, g: R.genre.name, d: Date.now(), c: R.results.length }));
     board.sort((a, b) => b.s - a.s); store.set("mq-board", board.slice(0, 200));
-    if (R.daily) store.set("mq-daily-" + todayKey(), { score: R.players[0].score });
+    if (R.daily) store.set("mq-daily-" + todayKey(), { score: R.players[0].score, text: shareText() });
   } else $("#fH").textContent = "Übungsrunde – zählt nicht für die Bestenliste";
-  $("#summary").innerHTML = R.results.map(r => `<div><span><b>${esc(r.song[1])}</b> · ${esc(r.song[0])}${party ? ` <em style="opacity:.6">(${esc(r.player)})</em>` : ""}</span><span class="p ${r.cls}">+${r.pts}</span></div>`).join("");
+  const mark = (ok, l) => `<i class="${ok ? "ok" : "miss"}">${ok ? "✓" : "✗"} ${l}</i>`;
+  $("#summary").innerHTML = `<h3 class="sum-h">Deine Songs</h3>` + R.results.map(r => {
+    const dz = r.song[3] || {}, img = safeUrl(dz.cover) ? dz.cover.replace(/\/\d+x\d+-/, "/250x250-") : "";
+    const link = safeUrl(dz.link) ? `<a class="sum-dz" href="${esc(dz.link)}" target="_blank" rel="noopener" aria-label="Auf Deezer hören">▶</a>` : "";
+    return `<div class="sum-row"><span class="sum-cv"${img ? ` style="background-image:url('${esc(img).replace(/'/g, "%27")}')"` : ""}></span><span class="sum-txt"><b>${esc(r.song[1])}</b><small>${esc(r.song[0])} · ${esc(r.song[2][0])}${party ? ` · ${esc(r.player)}` : ""}</small><span class="sum-marks">${mark(r.tOk, "Titel")}${mark(r.aOk, "Interpret")}${mark(r.yOk, "Jahr")}</span></span>${link}<span class="p ${r.cls}">+${r.pts}</span></div>`;
+  }).join("");
+  $("#share").className = R.daily && !R.practice ? "cta" : "ghost"; $("#again").className = R.daily && !R.practice ? "ghost" : "cta";
+  $("#share").textContent = R.daily && !R.practice ? "Ergebnis teilen 🟩🟨" : "Ergebnis teilen";
   setTimeout(() => { if (newRec || pct >= .7 || party) { SFX.win(); confetti(180); } }, 500);
 }
 $("#again").onclick = () => { SFX.tap(); const g = R.genre; if (R.daily) return startDaily(); if (g.id === "daily") return startDaily(); openSetup(g); };
 $("#toHome").onclick = () => { renderHome(); show("home"); };
-$("#share").onclick = async () => {
+const dailyNo = () => Math.floor((new Date(todayKey() + "T12:00:00") - new Date("2026-01-01T12:00:00")) / 864e5) + 1;
+function shareText() {
   const em = R.results.map(r => r.cls === "ok" ? "🟩" : r.cls === "part" ? "🟨" : "🟥").join("");
-  const who = R.mode === "party" ? R.players.slice().sort((a, b) => b.score - a.score).map(p => `${p.name}: ${p.score}`).join(", ") : `${R.players[0].score} Punkte`;
-  const text = `Music Quiz · ${R.genre.name} · ${R.daily ? "Tages-Challenge " + todayKey() : MODES[R.mode].name}\n${em}\n${who}`;
+  const head = R.daily ? `🎵 Music Quiz · Tages-Challenge #${dailyNo()}` : `🎵 Music Quiz · ${R.genre.name} · ${MODES[R.mode].name}`;
+  if (R.mode === "party") return `${head}\n${em}\n${R.players.slice().sort((a, b) => b.score - a.score).map(p => `${p.name}: ${p.score}`).join(", ")}`;
+  const p = R.players[0], hits = R.results.filter(r => r.tOk && r.aOk).length;
+  const fast = R.results.filter(r => r.heard != null).map(r => r.heard);
+  const extra = [fast.length ? `⚡ schnellster Treffer ${Math.max(1, Math.round(Math.min(...fast)))} s` : "", (p.bestStreak || 0) >= 3 ? `🔥 ${p.bestStreak}er-Combo` : ""].filter(Boolean).join(" · ");
+  return `${head}\n${em}  ${p.score} Punkte · ${hits}/${R.results.length} erkannt${extra ? "\n" + extra : ""}`;
+}
+async function shareOut(text) {
   try { if (navigator.share) { await navigator.share({ text, url: location.href.split("#")[0] }); return; } } catch (e) { return; }
   try { await navigator.clipboard.writeText(text + "\n" + location.href.split("#")[0]); toast("Ergebnis kopiert"); } catch (e) { toast("Teilen ist hier nicht möglich"); }
-};
+}
+$("#share").onclick = () => shareOut(shareText());
+$("#dailyShare").onclick = () => { const d = store.get("mq-daily-" + todayKey(), null); if (d && d.text) shareOut(d.text); };
 
 /* ============================ Einstellungen-Sheet ============================ */
-function renderSettings() {
-  $("#setList").innerHTML = SETTINGS.map(s => `<div class="set"><label>${s.label}</label>${s.desc ? `<p>${s.desc}</p>` : ""}${s.type === "text"
+function setHtml(s) {
+  return `<div class="set"><label>${s.label}</label>${s.desc ? `<p>${s.desc}</p>` : ""}${s.type === "text"
     ? `<input type="text" data-k="${s.key}" value="${esc(S[s.key])}" placeholder="z. B. Alex" maxlength="16">`
-    : `<div class="seg" data-k="${s.key}">${s.opts.map(([v, l], i) => `<button data-i="${i}" class="${S[s.key] === v ? "on" : ""}">${l}</button>`).join("")}</div>`}</div>`).join("");
+    : `<div class="seg" data-k="${s.key}">${s.opts.map(([v, l], i) => `<button data-i="${i}" class="${S[s.key] === v ? "on" : ""}">${l}</button>`).join("")}</div>`}</div>`;
+}
+let advOpen = false;
+function renderSettings() {
+  const pr = presetNow(), basic = SETTINGS.filter(s => BASIC.includes(s.key)), adv = SETTINGS.filter(s => !BASIC.includes(s.key));
+  const diff = `<div class="set"><label>Schwierigkeit</label><p>${pr ? PRESETS[pr].desc : "Eigene Mischung – unter „Erweitert“ angepasst."}</p><div class="seg" data-preset>${Object.entries(PRESETS).map(([k, x]) => `<button data-p="${k}" class="${k === pr ? "on" : ""}">${x.label}</button>`).join("")}</div></div>`;
+  $("#setList").innerHTML = basic.slice(0, 2).map(setHtml).join("") + diff + basic.slice(2).map(setHtml).join("") +
+    `<details class="adv"${advOpen ? " open" : ""}><summary>Erweitert</summary><div class="setlist">${adv.map(setHtml).join("")}</div></details>`;
+  $("#setList .adv").ontoggle = e => { advOpen = e.target.open; };
 }
 $("#setList").onclick = e => {
   const b = e.target.closest(".seg button"); if (!b) return;
+  if (b.dataset.p) { Object.assign(S, PRESETS[b.dataset.p].v); saveSettings(); SFX.tap(); renderSettings(); if (setupGenre) renderSetupSummary(); return; }
   const k = b.parentElement.dataset.k, def = SETTINGS.find(s => s.key === k);
-  S[k] = def.opts[+b.dataset.i][0]; saveSettings(); SFX.tap(); renderSettings(); if (k === "theme") applyTheme();
+  S[k] = def.opts[+b.dataset.i][0]; saveSettings(); SFX.tap(); renderSettings(); if (k === "theme") applyTheme(); if (setupGenre) renderSetupSummary();
 };
 $("#setList").oninput = e => { const k = e.target.dataset.k; if (k) { S[k] = e.target.value; saveSettings(); } };
 $("#resetBoard").onclick = () => confirmBox("Bestenliste löschen?", "Alle Einträge und Rekorde auf diesem Gerät werden entfernt.", "Löschen", () => {

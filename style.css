@@ -667,3 +667,24 @@ html[data-theme=glass] .pin{background:#ffffff1f;border-color:#ffffff40;color:#f
 .sap-opts .mco{min-height:auto;padding:.85rem 1rem}
 .mco.good{background:#2bff88!important;color:#08210f!important;border-color:#2bff88!important}
 .mco.badopt{background:#ff3d5a!important;color:#fff!important;border-color:#ff3d5a!important}
+
+/* ---------- Rückblick nach der Runde ---------- */
+.sum-h{font-family:Unbounded,sans-serif;font-size:.95rem;margin:0 0 .4rem}
+.summary .sum-row{justify-content:flex-start}
+.sum-cv{flex:none;width:3.2rem;height:3.2rem;border-radius:10px;background:#ffffff14 center/cover;box-shadow:0 2px 8px #0005}
+.summary .sum-txt{flex:1;min-width:0;display:block;color:var(--paper)}
+.sum-txt b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum-txt small{display:block;color:var(--mute);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum-marks{display:flex;gap:.35rem;margin-top:.3rem;flex-wrap:wrap}
+.sum-marks i{font-style:normal;font-size:.68rem;font-weight:800;padding:.1rem .45rem;border-radius:999px}
+.sum-marks i.ok{color:var(--ok);background:#7ff3a81c}
+.sum-marks i.miss{color:var(--miss);background:#ff6b8a1a;opacity:.85}
+.sum-dz{flex:none;display:grid;place-items:center;width:2.2rem;height:2.2rem;border-radius:50%;background:#ffffff1a;color:var(--paper);text-decoration:none;font-size:.8rem}
+.daily-share{display:block;margin:.6rem auto 0}
+/* ---------- Einstellungen: Erweitert ---------- */
+.adv{border-top:1px solid #ffffff1a;padding-top:.9rem}
+.adv summary{cursor:pointer;font-weight:800;font-size:.95rem;color:var(--lilac);list-style:none}
+.adv summary::-webkit-details-marker{display:none}
+.adv summary::after{content:" ▾"}
+.adv[open] summary::after{content:" ▴"}
+.adv .setlist{margin-top:1rem}
