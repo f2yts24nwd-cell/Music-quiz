@@ -885,7 +885,7 @@ function renderTop() {
 async function loadSong() {
   stop(); deck.stop(); loadToken++; resetMixer(); WAVE = null;
   P = { refs: [], slot: null, mc: null, struck: [], hints: [], played: 0, coverShown: false, stage: 0, blitzStart: null, seek: 0, rot: 0, dz: null, done: false, ready: false };
-  $("#coverWrap").className = "cover"; $("#cover").style.backgroundImage = ""; $("#cover").style.filter = "";
+  $("#coverWrap").className = "cover"; $("#cover").style.backgroundImage = ""; $("#cover").style.filter = ""; $(".cdj-jog").classList.remove("big");
   $("#guess").classList.remove("hide"); $("#reveal").classList.add("hide");
   $("#gTitle").value = ""; $("#gArtist").value = ""; $("#gYear").value = ""; $("#mcTitle").innerHTML = ""; $("#mcArtist").innerHTML = "";
   $("#typeFields").classList.toggle("hide", R.choice); $("#choiceFields").classList.toggle("hide", !R.choice); $("#usedHints").innerHTML = ""; $("#years").innerHTML = "";
@@ -1012,6 +1012,7 @@ stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercan
     stage.style.setProperty("--pitch", .5 - MIX.tempo / 32);
     $("#cdjBpm").textContent = (MIX.tempo >= 0 ? "+" : "−") + Math.abs(MIX.tempo).toFixed(1) + "%";
     if (R.cover && !P.coverShown && !P.done && P.played >= R.cover && P.dz && P.dz.cover) showCover(false);
+    if (P.coverShown && !P.coverPaid && !P.done) coverBlur();
     if (R.mode === "blitz" && P.blitzStart && !P.done) {
       const left = BLITZ_SEC - (now - P.blitzStart) / 1000;
       $("#blitzFill").style.transform = `scaleX(${clamp(left / BLITZ_SEC, 0, 1)})`;
@@ -1021,9 +1022,15 @@ stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercan
   requestAnimationFrame(loop);
 })(performance.now());
 
+// Unschärfe nimmt mit weiterer Hörzeit ab: anfangs nur Farben und Formen, später fast erkennbar
+function coverBlur() {
+  const b = Math.max(3, 9 - Math.floor(Math.max(0, P.played - (R.cover || 0)) / 2));
+  if (b !== P.blur) { P.blur = b; $("#cover").style.filter = `blur(${b}px) saturate(1.15)`; }
+}
 function showCover(paid) {
-  P.coverShown = true;
-  $("#cover").style.filter = paid ? "none" : "blur(14px) saturate(1.2)"; $("#coverWrap").classList.add("on");
+  P.coverShown = true; P.coverPaid = !!paid; P.blur = 0;
+  if (paid) $("#cover").style.filter = "none"; else coverBlur();
+  $("#coverWrap").classList.add("on"); $(".cdj-jog").classList.add("big");
   if (!paid) { toast("Cover-Hinweis aufgedeckt"); SFX.hint(); }
 }
 
@@ -1220,7 +1227,7 @@ const HINTS = [
     run: s => R.choice ? (P.mc.tStruck = shuffle(P.mc.title.filter(v => v !== s[1] && v !== P.mc.tPick)).slice(0, 2), renderMC(), { k: "Titel", v: "Zwei falsche Titel gestrichen" }) : { k: "Titel", v: mask(s[1]), code: true } },
   { id: "year", name: "Jahr eingrenzen", desc: "Zwei falsche Bereiche fliegen raus", ok: s => [0, 1, 2, 3].filter(i => !slotOk(P.refs, i, s[2]) && i !== P.slot).length >= 2,
     run: s => { P.struck = shuffle([0, 1, 2, 3].filter(i => !slotOk(P.refs, i, s[2]) && i !== P.slot)).slice(0, 2); renderYears(); return { k: "Jahr", v: "Zwei falsche Bereiche sind gestrichen" }; } },
-  { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverShown,
+  { id: "cover", name: "Cover zeigen", desc: "Das Albumcover, gut erkennbar", ok: () => P.dz && P.dz.cover && !P.coverPaid,
     run: () => { showCover(true); return { k: "Cover", v: "Schau auf das Jogwheel" }; } },
 ];
 $("#hintBtn").onclick = () => {
@@ -1284,7 +1291,7 @@ function submit(timeout) {
   html += extra.map(([k, v], i) => `<div class="r" style="animation-delay:${.24 + .08 * i}s"><div>${esc(k)}</div><div class="p ${v > 0 ? "ok" : "miss"}">${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v)}</div></div>`).join("");
   html += `<div class="total"><span>${R.mode === "party" ? esc(pl.name) : "Dieser Song"}</span><span>+${pts}</span></div>`;
   $("#rows").innerHTML = html;
-  const c = $("#cover"); c.style.filter = "none"; if (P.dz.cover) $("#coverWrap").classList.add("on");
+  const c = $("#cover"); c.style.filter = "none"; if (P.dz.cover) { $("#coverWrap").classList.add("on"); $(".cdj-jog").classList.add("big"); }
   const dzl = $("#dz"); if (safeUrl(P.dz.link)) { dzl.href = P.dz.link; dzl.classList.remove("hide"); } else dzl.classList.add("hide");
   $("#guess").classList.add("hide"); $("#reveal").classList.remove("hide");
   $("#status").textContent = "Dreh das Jogwheel, um weiterzuhören."; setRing(deck.time());

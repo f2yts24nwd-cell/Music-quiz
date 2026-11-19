@@ -622,16 +622,20 @@ html[data-theme=glass] input::placeholder{color:#ffffffb0}
   -webkit-mask:radial-gradient(circle,transparent 0 47%,#000 48% 100%);mask:radial-gradient(circle,transparent 0 47%,#000 48% 100%)}
 .cdj-mark{position:absolute;left:50%;top:4%;width:4px;height:13%;margin-left:-2px;border-radius:2px;background:#fff;box-shadow:0 0 6px #fff}
 .cdj.drag .cdj-plate{cursor:grabbing}
-.cdj-center{position:absolute;inset:31%;border-radius:50%;overflow:hidden;pointer-events:none;
+.cdj-center{position:absolute;inset:31%;border-radius:50%;overflow:hidden;pointer-events:none;transition:inset .7s var(--ease);
   background:radial-gradient(circle,#0b1a26,#04080c);box-shadow:0 0 0 3px #08090b,0 0 0 4px #2a2c33,inset 0 0 12px #000}
 .cdj-arc{position:absolute;inset:0;border-radius:50%;
   background:conic-gradient(#2ee6ff calc(var(--pos,0) * 1turn),#ffffff14 0);
   -webkit-mask:radial-gradient(circle,transparent 0 78%,#000 80%);mask:radial-gradient(circle,transparent 0 78%,#000 80%)}
-.cdj-dot{position:absolute;left:50%;top:50%;width:.55rem;height:.55rem;margin:-.275rem;border-radius:50%;background:#fff;box-shadow:0 0 8px #fff;
-  transform:rotate(calc(var(--pos,0) * 1turn)) translateY(-1.9rem)}
+.cdj-dot{position:absolute;inset:0;transform:rotate(calc(var(--pos,0) * 1turn))}
+.cdj-dot::after{content:"";position:absolute;left:50%;top:13.5%;width:.55rem;height:.55rem;margin:-.275rem;border-radius:50%;background:#fff;box-shadow:0 0 8px #fff}
 .cdj-center .cover{position:absolute;inset:12%;border-radius:50%;overflow:hidden;clip-path:circle(50%);opacity:0;transition:opacity .8s}
 .cdj-center .cover i{position:absolute;inset:-6%;background-size:cover;background-position:center;transition:filter 1.2s var(--ease)}
 .cdj-center .cover.on{opacity:1}
+/* Cover-Hinweis: Display wächst über die Jogscheibe, damit man etwas erkennt */
+.cdj-jog.big .cdj-center{inset:12%}
+.cdj-jog.big .cdj-center .cover{inset:7%}
+.cdj-jog.big .cdj-dot::after{top:7%}
 .cdj-right{align-self:stretch;display:flex;align-items:center}
 .cdj .tt-pitch{position:relative;right:auto;bottom:auto;width:2.2rem;height:85%;pointer-events:none}
 .cdj .tt-pitch span{color:#8d9099}
